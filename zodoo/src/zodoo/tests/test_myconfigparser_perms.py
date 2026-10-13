@@ -128,3 +128,57 @@ def test_an_empty_secret_is_not_a_secret(tmp_path, monkeypatch):
     cfg.write()
 
     assert _mode(path) == 0o664
+
+
+def _record_chown(monkeypatch):
+    calls = []
+    monkeypatch.setattr(os, "geteuid", lambda: 0)
+    monkeypatch.setattr(os, "chown", lambda path, uid, gid: calls.append((uid, gid)))
+    return calls
+
+
+def test_root_write_keeps_the_owner(tmp_path, monkeypatch):
+    """`sudo -E odoo reload` rewrote ~/.odoo/settings.<project> as root.
+
+    atomic_write puts a new file in place, so it belonged to root afterwards
+    (0600, a DB_PASSWORD is in it) and the cicd's next scp onto it failed with
+    "Permission denied" - the dump restore of an instance broke on that.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    path = tmp_path / "settings"
+    path.write_text("")
+    st = path.stat()
+    calls = _record_chown(monkeypatch)
+
+    cfg = MyConfigParser(path)
+    cfg["PROXY_PORT"] = "2001"
+    cfg.write()
+
+    assert calls == [(st.st_uid, st.st_gid)]
+
+
+def test_root_write_new_file_gets_owner_of_directory(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    path = tmp_path / "settings.newproject"
+    st = tmp_path.stat()
+    calls = _record_chown(monkeypatch)
+
+    cfg = MyConfigParser(path)
+    cfg["PROXY_PORT"] = "2001"
+    cfg.write()
+
+    assert calls == [(st.st_uid, st.st_gid)]
+
+
+def test_without_root_owner_is_not_touched(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    path = tmp_path / "settings"
+    path.write_text("")
+    calls = []
+    monkeypatch.setattr(os, "chown", lambda *a: calls.append(a))
+
+    cfg = MyConfigParser(path)
+    cfg["PROXY_PORT"] = "2001"
+    cfg.write()
+
+    assert calls == []

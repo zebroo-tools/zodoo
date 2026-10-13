@@ -122,6 +122,7 @@ class MyConfigParser:
             prev_mode = stat.S_IMODE(Path(self.fileName).stat().st_mode)
         except OSError:
             pass
+        owner = self._owner_to_keep()
 
         with atomic_write(self.fileName) as file:
             file.write_text("\n".join(_update_lines()) + "\n")
@@ -129,8 +130,35 @@ class MyConfigParser:
                 # Preserve the existing permissions - without this, every
                 # write would reset them to the umask.
                 file.chmod(prev_mode)
+            if owner:
+                # Same goes for the owner: the new file belongs to whoever
+                # writes it. Under `sudo -E odoo ...` that is root, while HOME
+                # still points at the instance user - ~/.odoo/settings.<project>
+                # then belonged to root (0600 with a secret in it) and the next
+                # scp of the cicd onto that file failed with "Permission denied".
+                os.chown(file, *owner)
             if self._holds_secret():
                 self._tighten(file)
+
+    def _owner_to_keep(self):
+        """uid/gid the rewritten file has to get back - only when we are root.
+
+        Without root there is nothing to do (and nothing we could do): the file
+        belongs to us anyway. An existing file keeps its owner, a new one gets
+        the owner of its directory.
+        """
+        if os.geteuid() != 0:
+            return None
+        path = Path(self.fileName)
+        for candidate in (path, path.parent):
+            try:
+                st = candidate.stat()
+            except OSError:
+                continue
+            if (st.st_uid, st.st_gid) == (0, 0):
+                return None
+            return st.st_uid, st.st_gid
+        return None
 
     # Settings whose file nobody but the owner should be able to read.
     # OFFSITE_PASSPHRASE is the most expensive of them: it decrypts the
