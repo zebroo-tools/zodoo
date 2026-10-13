@@ -1,3 +1,4 @@
+# Part of Zebroo GmbH. See LICENSE file for full copyright and licensing details (www.zebroo.de/license).
 from .tools import _search_path
 import os
 import subprocess
@@ -38,7 +39,7 @@ VERSIONS = [
     18.0,
 ]
 YAML_VERSION = "3.7"
-DEFAULT_IMAGES_REPO = "https://github.com/Odoo-Ninjas/zodoo"
+DEFAULT_IMAGES_REPO = "https://github.com/zebroo-tools/zodoo"
 
 
 def resolve_profiles(profile):

@@ -13,6 +13,9 @@ odoo robot setup
 ```
 
 It is idempotent — safe to run again on a project that is already set up.
+Existing GitHub entries under `Odoo-Ninjas` or `marcwimmer` are recognized after
+the transfer to `zebroo-tools`; their path, branch and commit pin are preserved.
+Repositories with a similar name or on another host are kept separately.
 
 `odoo robot setup` performs every step that used to be done by hand:
 

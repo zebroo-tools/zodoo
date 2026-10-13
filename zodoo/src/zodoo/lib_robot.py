@@ -1,3 +1,4 @@
+# Part of Zebroo GmbH. See LICENSE file for full copyright and licensing details (www.zebroo.de/license).
 import subprocess
 from copy import deepcopy
 import random
@@ -23,9 +24,29 @@ from .tools import _get_available_robottests
 from .tools import _yamldump
 from .tools import atomic_write
 from pathlib import Path
+from urllib.parse import urlparse
 
-ROBOT_UTILS_GIT = "Odoo-Ninjas/odoo-robot_utils"
+ROBOT_UTILS_GIT = "zebroo-tools/odoo-robot_utils"
 SELDRIVER_PREFIX = "seleniumdriver_"
+
+
+def _is_robot_utils_repository(url):
+    """Recognize the transferred repository without matching other projects."""
+    if url.startswith("git@github.com:"):
+        repository = url.split(":", 1)[1]
+    else:
+        parsed = urlparse(url)
+        if parsed.hostname != "github.com":
+            return False
+        repository = parsed.path.lstrip("/")
+    repository = repository.rstrip("/")
+    if repository.endswith(".git"):
+        repository = repository[:-4]
+    return repository.lower() in {
+        ROBOT_UTILS_GIT.lower(),
+        "odoo-ninjas/odoo-robot_utils",
+        "marcwimmer/odoo-robot_utils",
+    }
 
 
 @cli.group(cls=AliasedGroup)
@@ -43,7 +64,7 @@ def setup(ctx, config):
 
     content = yaml.safe_load((customs_dir() / "gimera.yml").read_text())
     for branch in content["repos"]:
-        if ROBOT_UTILS_GIT in branch["url"]:
+        if _is_robot_utils_repository(branch["url"]):
             break
     else:
         content["repos"].append(
