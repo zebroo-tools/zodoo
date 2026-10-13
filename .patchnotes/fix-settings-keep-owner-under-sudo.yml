@@ -1,0 +1,3 @@
+type: fix
+description: "Settings files written as root (`sudo -E odoo ...`) keep their owner instead of ending up as root:root 0600 in the instance user's ~/.odoo - the cicd could no longer overwrite them (dump restore failed with scp Permission denied)."
+breaking: false
