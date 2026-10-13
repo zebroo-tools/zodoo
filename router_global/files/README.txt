@@ -1,7 +1,7 @@
 Certbot:
 
 ./interactive.sh
-certbot renew --nginx
+certbot renew   (ohne --nginx: jedes Zertifikat mit seiner eigenen Methode)
 
 ---
 
