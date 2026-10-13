@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.7.2
+
+- **Fix**: Installer, CLI und Projektvorlagen verwenden zebroo-tools; Robot-Setup erkennt bestehende alte und neue Einbindungen ohne Duplikate.
+
+
 ## 12.7.1
 
 - **Fix**: Settings files written as root (`sudo -E odoo ...`) keep their owner instead of ending up as root:root 0600 in the instance user's ~/.odoo - the cicd could no longer overwrite them (dump restore failed with scp Permission denied).
