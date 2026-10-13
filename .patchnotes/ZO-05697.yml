@@ -1,0 +1,3 @@
+type: fix
+description: "Installer und Dokumentation verwenden nach dem Organisationsumzug zebroo-tools."
+breaking: false
