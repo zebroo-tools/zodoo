@@ -1,3 +1,4 @@
+# Part of Zebroo GmbH. See LICENSE file for full copyright and licensing details (www.zebroo.de/license).
 name: Pytest
 
 # Unit-test suite for the zodoo CLI. Fast (< 1 min), no docker / network.
@@ -22,7 +23,7 @@ on:
 
 jobs:
   unit:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || 'zebroo-tools' }}
     timeout-minutes: 10
     strategy:
       # fail-fast aus: schlaegt eine Version fehl, sollen die anderen
@@ -32,6 +33,20 @@ jobs:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
+      - name: Isolate job home and tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          job_home=$(mktemp -d "$RUNNER_TEMP/tools-home.XXXXXX")
+          mkdir -p "$job_home/.local/bin" "$job_home/pipx" "$job_home/tmp" "$job_home/.docker"
+          {
+            echo "HOME=$job_home"
+            echo "PIPX_HOME=$job_home/pipx"
+            echo "PIPX_BIN_DIR=$job_home/.local/bin"
+            echo "TMPDIR=$job_home/tmp"
+            echo "DOCKER_CONFIG=$job_home/.docker"
+          } >> "$GITHUB_ENV"
+          echo "$job_home/.local/bin" >> "$GITHUB_PATH"
       - uses: actions/checkout@v4
 
       - name: Set up Python
@@ -53,7 +68,7 @@ jobs:
         # can import zodoo + click + passlib + ... from the same env.
         # cd /tmp: newer pipx treats `zodoo` as a path when a ./zodoo/
         # directory exists in cwd, breaking the inject.
-        working-directory: /tmp
+        working-directory: ${{ runner.temp }}
         run: |
           pipx inject zodoo pytest pytest-cov
 
