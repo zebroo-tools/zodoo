@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.7.1
+
+- **Fix**: Settings files written as root (`sudo -E odoo ...`) keep their owner instead of ending up as root:root 0600 in the instance user's ~/.odoo - the cicd could no longer overwrite them (dump restore failed with scp Permission denied).
+
+
 ## 12.7.0
 
 - **Feature**: DEVMODE: Die auf den lokalen Mailcatcher umgebogenen Mailserver (ausgehend und eingehend) heißen jetzt „Test-Mailserver (<alter Name>)“, damit auf einer Testkopie niemand mehr annimmt, der echte Mailserver sei aktiv. Übersetzbare Namen (jsonb) werden in jeder Sprache angepasst, ein erneutes turn-into-dev hängt das Präfix nicht doppelt an. Außerdem wird der SMTP-Server ab Odoo 13 jetzt auch dann umgebogen, wenn fetchmail nicht installiert ist. Prüfen: Prod-Dump mit DEVMODE=1 restoren oder `odoo dev-env turn-into-dev` ausführen, dann unter Einstellungen → Technisch → Ausgehende Mailserver bzw. Eingehende Mailserver nachsehen.
