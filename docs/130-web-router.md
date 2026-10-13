@@ -98,7 +98,7 @@ the same schema as the ansible `web_router.virtual_hosts` list. JSON works just
 as well: the file is read with `yaml.safe_load`, and YAML is a superset of JSON.
 
 A complete, commented example is in
-[`router_global/vhosts.example.yml`](https://github.com/Odoo-Ninjas/zodoo/blob/main/router_global/vhosts.example.yml).
+[`router_global/vhosts.example.yml`](https://github.com/zebroo-tools/zodoo/blob/main/router_global/vhosts.example.yml).
 
 ```yaml
 - template: upstream_direct_odoo
@@ -147,8 +147,8 @@ If `redirect_to` contains a `/`, everything lands exactly there. Without a path
 the requested path is appended (`$request_uri`):
 
 ```yaml
-redirect_to: zebroo.de                     # /foo  ->  zebroo.de/foo
-redirect_to: zebroo.de/zebroo-experience   # /foo  ->  zebroo.de/zebroo-experience
+redirect_to: zebroo.de # /foo  ->  zebroo.de/foo
+redirect_to: zebroo.de/zebroo-experience # /foo  ->  zebroo.de/zebroo-experience
 ```
 
 ## Offline / self-signed TLS

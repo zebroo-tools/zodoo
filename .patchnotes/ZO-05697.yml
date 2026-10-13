@@ -1,0 +1,3 @@
+type: fix
+description: "Installer, CLI und Projektvorlagen verwenden zebroo-tools; Robot-Setup erkennt bestehende alte und neue Einbindungen ohne Duplikate."
+breaking: false

@@ -39,7 +39,7 @@ macOS and Windows have extra setup worth reading before you begin:
 ## Install zodoo
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/Odoo-Ninjas/zodoo/refs/heads/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/zebroo-tools/zodoo/refs/heads/main/install.sh)
 ```
 
 This installs the `odoo` command through pipx and clones the zodoo images to
@@ -182,15 +182,15 @@ odoo -f db reset
 
 ## Everyday commands
 
-| You want to | Command |
-| --- | --- |
-| Start the instance | `odoo up -d` |
-| Stop it and remove the containers | `odoo down` |
-| Restart without removing containers | `odoo restart` |
-| See the URL, version and settings | `odoo setup status` |
+| You want to                                | Command                     |
+| ------------------------------------------ | --------------------------- |
+| Start the instance                         | `odoo up -d`                |
+| Stop it and remove the containers          | `odoo down`                 |
+| Restart without removing containers        | `odoo restart`              |
+| See the URL, version and settings          | `odoo setup status`         |
 | Rebuild after changing settings or modules | `odoo reload && odoo build` |
-| Update modules after pulling code | `odoo update` |
-| Run in the foreground, for debugging | `odoo dev` |
+| Update modules after pulling code          | `odoo update`               |
+| Run in the foreground, for debugging       | `odoo dev`                  |
 
 The full set is in the [Command Reference](060-command-reference.md).
 

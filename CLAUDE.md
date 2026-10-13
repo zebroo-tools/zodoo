@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # zodoo – Odoo Docker Framework
 
-Source for the Docker images and project templates that the `odoo` CLI builds against. Users install via `bash <(curl -fsSL https://raw.githubusercontent.com/Odoo-Ninjas/zodoo/refs/heads/main/install.sh)` which clones this repo to `~/.odoo/images/` and pipx-installs `zodoo/src/` as the `odoo` command.
+Source for the Docker images and project templates that the `odoo` CLI builds against. Users install via `bash <(curl -fsSL https://raw.githubusercontent.com/zebroo-tools/zodoo/refs/heads/main/install.sh)` which clones this repo to `~/.odoo/images/` and pipx-installs `zodoo/src/` as the `odoo` command.
 
 ## Repo layout (high-level)
 
@@ -91,7 +91,7 @@ odoo build <name> --no-zodoo-pull
 Either `rsync -av --exclude='.git' ./ ~/.odoo/images/` or `export ODOO_IMAGES=$(pwd)`.
 
 **Changed a `Dockerfile` or a file it `COPY`s? Run `odoo reload` before `odoo build`.**
-`odoo build` builds from the *generated* Dockerfile under
+`odoo build` builds from the _generated_ Dockerfile under
 `~/.odoo/run/<project>/Dockerfiles/<service>`, which only `odoo reload`
 rewrites. Without the reload the build reports `DONE` from cache and the change
 is silently absent from the image - which then shows up much later as a missing
@@ -111,7 +111,7 @@ file or a missing binary inside the container.
 3. Commit (pre-commit will run `black`, `autoflake`, etc. and may reformat — re-stage and re-commit if so).
 4. Push + `gh pr create --base main`.
 
-The remote uses **SSH** (`git@github.com:Odoo-Ninjas/zodoo.git`) — pushing workflow file changes via the HTTPS remote is rejected because the OAuth token lacks `workflow` scope.
+The remote uses **SSH** (`git@github.com:zebroo-tools/zodoo.git`) — pushing workflow file changes via the HTTPS remote is rejected because the OAuth token lacks `workflow` scope.
 
 ## Releasing — towncrier
 

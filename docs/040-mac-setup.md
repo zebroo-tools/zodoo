@@ -10,7 +10,7 @@
 
 ```bash
 brew install git pipx rsync
-bash <(curl -fsSL https://raw.githubusercontent.com/Odoo-Ninjas/zodoo/refs/heads/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/zebroo-tools/zodoo/refs/heads/main/install.sh)
 ```
 
 By default this uses the Python that ships with Xcode. If your Odoo version
@@ -126,7 +126,7 @@ If you had wodoo installed before:
 
 ```bash
 rm -Rf ~/.odoo/images
-bash <(curl -fsSL https://raw.githubusercontent.com/Odoo-Ninjas/zodoo/refs/heads/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/zebroo-tools/zodoo/refs/heads/main/install.sh)
 ```
 
 ### Port already in use
