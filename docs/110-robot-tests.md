@@ -22,7 +22,7 @@ It is idempotent — safe to run again on a project that is already set up.
    - branch: main
      path: addons_robot
      type: integrated
-     url: git@github.com:Odoo-Ninjas/odoo-robot_utils
+     url: git@github.com:zebroo-tools/odoo-robot_utils
    ```
 
 2. Adds `robot_utils` to the `install` list in `MANIFEST`.

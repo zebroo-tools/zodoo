@@ -107,7 +107,7 @@ git clone <github url>
 ## 5. Install zodoo
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/Odoo-Ninjas/zodoo/refs/heads/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/zebroo-tools/zodoo/refs/heads/main/install.sh)
 # Registers the global `odoo` CLI via pipx, using the system Python provided by Ubuntu.
 ```
 
