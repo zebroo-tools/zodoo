@@ -361,6 +361,10 @@ panels.append(
 )
 y += 7
 
+# Response-time queries extract ONLY request_time (and uri where grouped) and
+# aggregate with by (): a bare `| json` turns every access-log field (uri,
+# remote_addr, time, ...) into a label, so each request becomes its own
+# series and Loki aborts at 500 series -> the panels showed "No data".
 panels.append(rowp("Requests & Response times", y))
 y += 1
 panels.append(
@@ -384,17 +388,17 @@ panels.append(
         gp(12, y, 12, 8),
         [
             lt(
-                'quantile_over_time(0.50, {job="nginx"} | json | unwrap request_time [$__interval])',
+                'quantile_over_time(0.50, {job="nginx"} | json request_time | unwrap request_time | __error__="" [$__interval]) by ()',
                 refId="A",
                 legend="p50",
             ),
             lt(
-                'quantile_over_time(0.95, {job="nginx"} | json | unwrap request_time [$__interval])',
+                'quantile_over_time(0.95, {job="nginx"} | json request_time | unwrap request_time | __error__="" [$__interval]) by ()',
                 refId="B",
                 legend="p95",
             ),
             lt(
-                'max_over_time({job="nginx"} | json | unwrap request_time [$__interval])',
+                'max_over_time({job="nginx"} | json request_time | unwrap request_time | __error__="" [$__interval]) by ()',
                 refId="C",
                 legend="max",
             ),
@@ -427,7 +431,7 @@ panels.append(
         gp(8, y, 4, 6),
         [
             lt(
-                'avg_over_time({job="nginx"} | json | unwrap request_time [5m])',
+                'avg_over_time({job="nginx"} | json request_time | unwrap request_time | __error__="" [5m]) by ()',
                 instant=True,
             )
         ],
@@ -466,7 +470,7 @@ panels.append(
         gp(0, y, 12, 8),
         [
             lt(
-                'topk(10, quantile_over_time(0.95, {job="nginx"} %s | json | unwrap request_time [$__interval]) by (uri))'
+                'topk(10, quantile_over_time(0.95, {job="nginx"} %s | json uri, request_time | unwrap request_time | __error__="" [$__interval]) by (uri))'
                 % ROUTE_EXCL,
                 legend="{{uri}}",
             )
@@ -481,7 +485,7 @@ panels.append(
         gp(12, y, 12, 8),
         [
             lt(
-                'topk(15, quantile_over_time(0.95, {job="nginx"} %s | json | unwrap request_time [$__range]) by (uri))'
+                'topk(15, quantile_over_time(0.95, {job="nginx"} %s | json uri, request_time | unwrap request_time | __error__="" [$__range]) by (uri))'
                 % ROUTE_EXCL,
                 instant=True,
             )

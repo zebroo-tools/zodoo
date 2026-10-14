@@ -437,7 +437,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "quantile_over_time(0.50, {job=\"nginx\"} | json | unwrap request_time [$__interval])",
+          "expr": "quantile_over_time(0.50, {job=\"nginx\"} | json request_time | unwrap request_time | __error__=\"\" [$__interval]) by ()",
           "queryType": "range",
           "legendFormat": "p50"
         },
@@ -447,7 +447,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "quantile_over_time(0.95, {job=\"nginx\"} | json | unwrap request_time [$__interval])",
+          "expr": "quantile_over_time(0.95, {job=\"nginx\"} | json request_time | unwrap request_time | __error__=\"\" [$__interval]) by ()",
           "queryType": "range",
           "legendFormat": "p95"
         },
@@ -457,7 +457,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "max_over_time({job=\"nginx\"} | json | unwrap request_time [$__interval])",
+          "expr": "max_over_time({job=\"nginx\"} | json request_time | unwrap request_time | __error__=\"\" [$__interval]) by ()",
           "queryType": "range",
           "legendFormat": "max"
         }
@@ -594,7 +594,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "avg_over_time({job=\"nginx\"} | json | unwrap request_time [5m])",
+          "expr": "avg_over_time({job=\"nginx\"} | json request_time | unwrap request_time | __error__=\"\" [5m]) by ()",
           "queryType": "instant"
         }
       ],
@@ -695,7 +695,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "topk(10, quantile_over_time(0.95, {job=\"nginx\"} !~ `\"uri\":\"/(system|logs)` | json | unwrap request_time [$__interval]) by (uri))",
+          "expr": "topk(10, quantile_over_time(0.95, {job=\"nginx\"} !~ `\"uri\":\"/(system|logs)` | json uri, request_time | unwrap request_time | __error__=\"\" [$__interval]) by (uri))",
           "queryType": "range",
           "legendFormat": "{{uri}}"
         }
@@ -740,7 +740,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "topk(15, quantile_over_time(0.95, {job=\"nginx\"} !~ `\"uri\":\"/(system|logs)` | json | unwrap request_time [$__range]) by (uri))",
+          "expr": "topk(15, quantile_over_time(0.95, {job=\"nginx\"} !~ `\"uri\":\"/(system|logs)` | json uri, request_time | unwrap request_time | __error__=\"\" [$__range]) by (uri))",
           "queryType": "instant"
         }
       ],
