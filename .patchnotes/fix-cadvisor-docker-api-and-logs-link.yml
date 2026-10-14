@@ -1,0 +1,3 @@
+type: fix
+description: "cadvisor auf v0.52.1 (Docker 29 lehnt API 1.41 ab, CPU-/RAM-Panels waren leer); Link-Leiste Overview/Logs/Log-Explorer oben in beiden Dashboards"
+breaking: false

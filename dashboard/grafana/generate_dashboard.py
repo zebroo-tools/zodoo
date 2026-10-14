@@ -189,6 +189,29 @@ def rowp(title, y):
     }
 
 
+def nav(y):
+    """Link bar between the entry points.
+
+    A panel instead of dashboard "links": /system opens in kiosk mode, which
+    hides Grafana's top bar and with it the dashboard links. The targets are
+    the proxy's friendly redirects (see dashboard/proxy/dashboard.conf).
+    """
+    return {
+        "id": nid(),
+        "type": "text",
+        "title": "",
+        "transparent": True,
+        "gridPos": gp(0, y, 24, 2),
+        "options": {
+            "mode": "markdown",
+            "content": (
+                "[Overview](/system) &nbsp;|&nbsp; [Logs](/logs)"
+                " &nbsp;|&nbsp; [Log explorer](/logs2)"
+            ),
+        },
+    }
+
+
 def pt(expr, refId="A", ds=PROM, legend=None, instant=False):
     t = {"refId": refId, "datasource": ds, "expr": expr}
     if legend is not None:
@@ -273,6 +296,8 @@ def write(name, dash):
 _id[0] = 0
 panels = []
 y = 0
+panels.append(nav(y))
+y += 2
 panels.append(rowp("System - CPU / RAM / Disk", y))
 y += 1
 panels.append(
@@ -799,6 +824,8 @@ SEL = (
 _id[0] = 0
 p = []
 y = 0
+p.append(nav(y))
+y += 2
 p.append(
     stat(
         "Errors last 24h",
