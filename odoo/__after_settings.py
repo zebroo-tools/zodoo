@@ -44,8 +44,25 @@ def after_settings(settings, config):
             settings["ODOO_PYTHON_VERSION"].split(".")[:2]
         )
 
+    settings["ODOO_LOG_LEVEL"] = _log_level(settings)
+
     settings.write()
 
     # replace any env variable
     if not settings["ODOO_FILES"]:
         settings["ODOO_FILES"] = str(Path(settings["HOST_RUN_DIR"]) / "files")
+
+
+def _log_level(settings):
+    # Real instances log warnings and up. Everything below ends up in Loki
+    # (alloy collects the container logs) and nobody reads it there: on
+    # hosting.zebroo.de info alone was ~180 lines per minute, debug ~4000.
+    # Developers keep info - module loading and requests are what they
+    # watch in `odoo logs`. An explicit setting always wins.
+    level = (settings.get("ODOO_LOG_LEVEL") or "").strip().lower()
+    if not level:
+        return "info" if settings.get("DEVMODE") == "1" else "warn"
+    # odoo-bin only knows "warn"; "warning" would stop the server at startup.
+    if level == "warning":
+        return "warn"
+    return level

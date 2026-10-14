@@ -86,7 +86,7 @@ ODOO_ENABLE_DB_MANAGER=0
 ODOO_FILES=/home/parallels/.odoo/files
 ODOO_IMAGES=/home/parallels/.odoo/images
 ODOO_INSTALL_LIBPOSTAL=0
-ODOO_LOG_LEVEL=debug
+ODOO_LOG_LEVEL				debug|info|warn|error|critical. Empty = warn on real instances, info with DEVMODE=1
 ODOO_MAX_CRON_THREADS=2
 ODOO_PYTHON_DEBUG_PORT=
 ODOO_PYTHON_VERSION=3.9.17
