@@ -44,10 +44,6 @@ services:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
       GF_AUTH_ANONYMOUS_HIDE_VERSION: "true"
-      # Explore (/logs2) is Editor-only since Grafana 11: an anonymous Viewer
-      # gets bounced to the home dashboard. This lets Viewers into Explore;
-      # they still cannot save dashboards (provisioned from files anyway).
-      GF_USERS_VIEWERS_CAN_EDIT: "true"
       # Basic auth is disabled: the proxy gate handles access (password-only),
       # and Grafana must stay anonymous. The gate does not forward any
       # Authorization header, so there is nothing for Grafana to authenticate.

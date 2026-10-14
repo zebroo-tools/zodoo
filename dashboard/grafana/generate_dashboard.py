@@ -451,12 +451,12 @@ panels.append(
 )
 y += 6
 
-# The dashboard's own pages (Grafana under /system, the log explorers under
-# /logs and /logs2) generate constant auto-refresh self-traffic that would
+# The dashboard's own pages (Grafana under /system, the log explorer under
+# /logs) generate constant auto-refresh self-traffic that would
 # otherwise dominate the route stats. A *line* filter on the raw nginx-JSON
 # field is used (a `| uri !~` label filter after `| json` does NOT reliably
 # drop them in Loki); it must sit before `| json`. The prefix match covers
-# /system/api/..., /logs/... and /logs2 too.
+# /system/api/..., /logs/... and the /logs2 redirect too.
 ROUTE_EXCL = '!~ `"uri":"/(system|logs)`'
 panels.append(rowp("Routes (from nginx access log)", y))
 y += 1
