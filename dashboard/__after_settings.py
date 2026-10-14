@@ -11,6 +11,21 @@ def generate_password(length=12):
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
+def _persist(config, key, value):
+    """Write a generated secret to the project settings file.
+
+    `settings` is the merged run file that every `odoo reload` rebuilds from
+    scratch. A value set only there is rolled again on the next reload, and the
+    password already handed out stops working.
+    """
+    files = getattr(config, "files", None) or {}
+    if "project_settings" not in files:
+        return
+    from zodoo.tools import update_setting
+
+    update_setting(config, key, value)
+
+
 def after_settings(settings, config):
     import click
 
@@ -18,6 +33,7 @@ def after_settings(settings, config):
     # instances, but leave it empty in DEVMODE (gate then stays open).
     if not settings.get("DASHBOARD_PASSWORD") and settings["DEVMODE"] != "1":
         settings["DASHBOARD_PASSWORD"] = generate_password(12)
+        _persist(config, "DASHBOARD_PASSWORD", settings["DASHBOARD_PASSWORD"])
 
     # ------------------------------------------------------------------
     # remote_write: Schutzplanken
