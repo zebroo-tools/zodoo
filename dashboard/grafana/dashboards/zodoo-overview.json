@@ -56,18 +56,34 @@
   "panels": [
     {
       "id": 1,
+      "type": "text",
+      "title": "",
+      "transparent": true,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 2
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "[Overview](/system) &nbsp;|&nbsp; [Logs](/logs) &nbsp;|&nbsp; [Log explorer](/logs2)"
+      }
+    },
+    {
+      "id": 2,
       "type": "row",
       "title": "System - CPU / RAM / Disk",
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 0,
+        "y": 2,
         "w": 24,
         "h": 1
       }
     },
     {
-      "id": 2,
+      "id": 3,
       "type": "timeseries",
       "title": "CPU usage per container (cores)",
       "datasource": {
@@ -76,7 +92,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 1,
+        "y": 3,
         "w": 12,
         "h": 8
       },
@@ -111,7 +127,7 @@
       }
     },
     {
-      "id": 3,
+      "id": 4,
       "type": "timeseries",
       "title": "Memory usage per container",
       "datasource": {
@@ -120,7 +136,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 1,
+        "y": 3,
         "w": 12,
         "h": 8
       },
@@ -155,7 +171,7 @@
       }
     },
     {
-      "id": 4,
+      "id": 5,
       "type": "timeseries",
       "title": "Filesystem usage % (host/VM)",
       "datasource": {
@@ -164,7 +180,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 9,
+        "y": 11,
         "w": 8,
         "h": 7
       },
@@ -199,7 +215,7 @@
       }
     },
     {
-      "id": 5,
+      "id": 6,
       "type": "stat",
       "title": "Filestore size",
       "datasource": {
@@ -208,7 +224,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 9,
+        "y": 11,
         "w": 4,
         "h": 7
       },
@@ -245,7 +261,7 @@
       }
     },
     {
-      "id": 6,
+      "id": 7,
       "type": "stat",
       "title": "DB size",
       "datasource": {
@@ -254,7 +270,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 9,
+        "y": 11,
         "w": 4,
         "h": 7
       },
@@ -291,7 +307,7 @@
       }
     },
     {
-      "id": 7,
+      "id": 8,
       "type": "stat",
       "title": "Web workers / cron / queue",
       "datasource": {
@@ -300,7 +316,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 9,
+        "y": 11,
         "w": 8,
         "h": 7
       },
@@ -357,19 +373,19 @@
       }
     },
     {
-      "id": 8,
+      "id": 9,
       "type": "row",
       "title": "Requests & Response times",
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 16,
+        "y": 18,
         "w": 24,
         "h": 1
       }
     },
     {
-      "id": 9,
+      "id": 10,
       "type": "timeseries",
       "title": "Requests/s by status",
       "datasource": {
@@ -378,7 +394,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 17,
+        "y": 19,
         "w": 12,
         "h": 8
       },
@@ -417,7 +433,7 @@
       }
     },
     {
-      "id": 10,
+      "id": 11,
       "type": "timeseries",
       "title": "Response time (p50 / p95 / max)",
       "datasource": {
@@ -426,7 +442,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 17,
+        "y": 19,
         "w": 12,
         "h": 8
       },
@@ -482,7 +498,7 @@
       }
     },
     {
-      "id": 11,
+      "id": 12,
       "type": "stat",
       "title": "Avg request rate (1m)",
       "datasource": {
@@ -491,7 +507,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 25,
+        "y": 27,
         "w": 4,
         "h": 6
       },
@@ -528,7 +544,7 @@
       }
     },
     {
-      "id": 12,
+      "id": 13,
       "type": "stat",
       "title": "Concurrent connections",
       "datasource": {
@@ -537,7 +553,7 @@
       },
       "gridPos": {
         "x": 4,
-        "y": 25,
+        "y": 27,
         "w": 4,
         "h": 6
       },
@@ -574,7 +590,7 @@
       }
     },
     {
-      "id": 13,
+      "id": 14,
       "type": "stat",
       "title": "Avg response time (5m)",
       "datasource": {
@@ -583,7 +599,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 25,
+        "y": 27,
         "w": 4,
         "h": 6
       },
@@ -620,7 +636,7 @@
       }
     },
     {
-      "id": 14,
+      "id": 15,
       "type": "piechart",
       "title": "Requests by status (range)",
       "datasource": {
@@ -629,7 +645,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 25,
+        "y": 27,
         "w": 12,
         "h": 6
       },
@@ -663,19 +679,19 @@
       }
     },
     {
-      "id": 15,
+      "id": 16,
       "type": "row",
       "title": "Routes (from nginx access log)",
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 31,
+        "y": 33,
         "w": 24,
         "h": 1
       }
     },
     {
-      "id": 16,
+      "id": 17,
       "type": "timeseries",
       "title": "Response time p95 by route (top 10)",
       "datasource": {
@@ -684,7 +700,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 32,
+        "y": 34,
         "w": 12,
         "h": 8
       },
@@ -720,7 +736,7 @@
       }
     },
     {
-      "id": 17,
+      "id": 18,
       "type": "table",
       "title": "Slowest routes (p95 over range)",
       "datasource": {
@@ -729,7 +745,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 32,
+        "y": 34,
         "w": 12,
         "h": 8
       },
@@ -755,19 +771,19 @@
       }
     },
     {
-      "id": 18,
+      "id": 19,
       "type": "row",
       "title": "Network & Disk IO (odoo / postgres)",
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 40,
+        "y": 42,
         "w": 24,
         "h": 1
       }
     },
     {
-      "id": 19,
+      "id": 20,
       "type": "timeseries",
       "title": "Network IO odoo / postgres (recv/send)",
       "datasource": {
@@ -776,7 +792,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 41,
+        "y": 43,
         "w": 12,
         "h": 8
       },
@@ -820,7 +836,7 @@
       }
     },
     {
-      "id": 20,
+      "id": 21,
       "type": "timeseries",
       "title": "Disk IO odoo / postgres (read/write)",
       "datasource": {
@@ -829,7 +845,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 41,
+        "y": 43,
         "w": 12,
         "h": 8
       },
@@ -873,19 +889,19 @@
       }
     },
     {
-      "id": 21,
+      "id": 22,
       "type": "row",
       "title": "PostgreSQL",
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 49,
+        "y": 51,
         "w": 24,
         "h": 1
       }
     },
     {
-      "id": 22,
+      "id": 23,
       "type": "timeseries",
       "title": "DB connections",
       "datasource": {
@@ -894,7 +910,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 50,
+        "y": 52,
         "w": 8,
         "h": 7
       },
@@ -929,7 +945,7 @@
       }
     },
     {
-      "id": 23,
+      "id": 24,
       "type": "timeseries",
       "title": "Cache hit ratio",
       "datasource": {
@@ -938,7 +954,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 50,
+        "y": 52,
         "w": 8,
         "h": 7
       },
@@ -973,7 +989,7 @@
       }
     },
     {
-      "id": 24,
+      "id": 25,
       "type": "timeseries",
       "title": "Transactions/s (commit/rollback)",
       "datasource": {
@@ -982,7 +998,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 50,
+        "y": 52,
         "w": 8,
         "h": 7
       },
@@ -1026,19 +1042,19 @@
       }
     },
     {
-      "id": 25,
+      "id": 26,
       "type": "row",
       "title": "Background jobs (queue & cron)",
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 57,
+        "y": 59,
         "w": 24,
         "h": 1
       }
     },
     {
-      "id": 26,
+      "id": 27,
       "type": "stat",
       "title": "DB reachable",
       "datasource": {
@@ -1047,7 +1063,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 58,
+        "y": 60,
         "w": 4,
         "h": 6
       },
@@ -1113,7 +1129,7 @@
       }
     },
     {
-      "id": 27,
+      "id": 28,
       "type": "stat",
       "title": "Active cron jobs",
       "datasource": {
@@ -1122,7 +1138,7 @@
       },
       "gridPos": {
         "x": 4,
-        "y": 58,
+        "y": 60,
         "w": 4,
         "h": 6
       },
@@ -1159,7 +1175,7 @@
       }
     },
     {
-      "id": 28,
+      "id": 29,
       "type": "stat",
       "title": "Queue jobs failed",
       "datasource": {
@@ -1168,7 +1184,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 58,
+        "y": 60,
         "w": 4,
         "h": 6
       },
@@ -1218,7 +1234,7 @@
       }
     },
     {
-      "id": 29,
+      "id": 30,
       "type": "timeseries",
       "title": "Queue jobs by state",
       "datasource": {
@@ -1227,7 +1243,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 58,
+        "y": 60,
         "w": 12,
         "h": 6
       },
@@ -1262,19 +1278,19 @@
       }
     },
     {
-      "id": 30,
+      "id": 31,
       "type": "row",
       "title": "Mail",
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 64,
+        "y": 66,
         "w": 24,
         "h": 1
       }
     },
     {
-      "id": 31,
+      "id": 32,
       "type": "timeseries",
       "title": "Mail messages by type (increase/1h)",
       "datasource": {
@@ -1283,7 +1299,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 65,
+        "y": 67,
         "w": 12,
         "h": 7
       },
@@ -1318,7 +1334,7 @@
       }
     },
     {
-      "id": 32,
+      "id": 33,
       "type": "stat",
       "title": "Outgoing / failed / sent mail (mail.mail)",
       "datasource": {
@@ -1327,7 +1343,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 65,
+        "y": 67,
         "w": 12,
         "h": 7
       },
@@ -1384,19 +1400,19 @@
       }
     },
     {
-      "id": 33,
+      "id": 34,
       "type": "row",
       "title": "Logs & Errors",
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 72,
+        "y": 74,
         "w": 24,
         "h": 1
       }
     },
     {
-      "id": 34,
+      "id": 35,
       "type": "stat",
       "title": "Errors last 24h",
       "datasource": {
@@ -1405,7 +1421,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 73,
+        "y": 75,
         "w": 6,
         "h": 6
       },
@@ -1442,7 +1458,7 @@
       }
     },
     {
-      "id": 35,
+      "id": 36,
       "type": "timeseries",
       "title": "Log lines/s by container (odoo / postgres / proxy)",
       "datasource": {
@@ -1451,7 +1467,7 @@
       },
       "gridPos": {
         "x": 6,
-        "y": 73,
+        "y": 75,
         "w": 18,
         "h": 6
       },
@@ -1490,7 +1506,7 @@
       }
     },
     {
-      "id": 36,
+      "id": 37,
       "type": "logs",
       "title": "Recent errors (this instance)",
       "datasource": {
@@ -1499,7 +1515,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 79,
+        "y": 81,
         "w": 24,
         "h": 10
       },
