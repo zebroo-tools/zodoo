@@ -119,10 +119,36 @@ A complete, commented example is in
 | `redirect`                  | `server_name`, `redirect_to`                                                  | Redirect to another address.                                               |
 | `static_files`              | `server_name`, `folder`                                                       | Serve a directory.                                                         |
 | `existing_ssl_certificates` | `server_name`                                                                 | Certificate block only, no backend.                                        |
+| `default_server`            | nothing — the router adds it itself                                           | The catch-all for unknown names (see below).                               |
 
 With a custom certificate (`ssl_key_is_on_destination` or `ssl_server_cert`)
 `certificate_name` becomes required as well — it is the directory name under
 `/etc/ssl/custom_ssl/`.
+
+### The catch-all vhost
+
+Every router renders one extra vhost that is not in `vhosts.yml`:
+`sites-enabled/00_default`. It carries `default_server` on both ports and
+answers 404 for every name the router does not serve, including a call to the
+bare IP.
+
+It exists because nginx otherwise promotes the **first server block it parses**
+to the default — and the blocks are pulled in by `include sites-enabled/*`,
+that is, by filename. Deploying a vhost whose name happens to sort first then
+silently hands it all stray traffic. On hy-router a newly added
+`3dm-monitoring.zebroo.de` did exactly that: from that moment the bare router
+IP, and every unknown domain pointing at it, was redirected into an internal
+monitoring site.
+
+Its certificate is self-signed (`custom_ssl/_default/`) — whoever lands here
+asked for a name this router does not serve, so no certificate could match
+anyway, and nginx needs one to answer on 443 at all. ACME challenges stay
+reachable through it, because a certificate is validated before the vhost it
+belongs to exists.
+
+To use a different catch-all, put your own entry with
+`template: default_server` in `vhosts.yml` — a hand-written one wins and
+nothing is appended.
 
 ### Optional fields
 

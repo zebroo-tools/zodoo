@@ -1,0 +1,41 @@
+# The catch-all vhost: everything that matches no server_name lands here.
+#
+# Without it nginx promotes the FIRST server block it parses to the default,
+# and the blocks arrive via "include sites-enabled/*" - in other words, by
+# filename. A new vhost whose name happens to sort first then silently
+# inherits every stray request: on 2026-10-14 "3dm-monitoring.zebroo.de" was
+# deployed and from that moment the bare router IP, and every unknown domain
+# pointing at it, was redirected into an internal monitoring site.
+#
+# The explicit default_server below ends that. The filename (00_default) only
+# makes it visible where the block sits; correctness no longer depends on it.
+#
+# 404 and not 444: a closed connection is indistinguishable from an outage,
+# and the router's own health check asks for exactly this answer.
+server {
+    listen 80 default_server;
+    server_name _;
+
+    # Keep ACME reachable: a certificate for a vhost that is being created
+    # right now is validated before its own server block exists.
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 404;
+    }
+
+# SSL_CERTIFICATE_ANSIBLE
+# BEGIN SSL Parameters by Ansible for {{ item.server_name }}
+# A self-signed certificate on purpose: whoever ends up here asked for a name
+# this router does not serve, so no certificate could match anyway. nginx
+# still needs one to answer on 443 at all.
+listen 443 ssl default_server;
+ssl_certificate /etc/ssl/custom_ssl/{{ item.certificate_name }}/server.crt;
+ssl_certificate_key /etc/ssl/custom_ssl/{{ item.certificate_name }}/server.key;
+ssl_session_timeout 30m;
+ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+ssl_prefer_server_ciphers on;
+# END SSL Parameters by Ansible for {{ item.server_name }}
+}
