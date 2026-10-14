@@ -1,3 +1,4 @@
+# Part of Zebroo GmbH. See LICENSE file for full copyright and licensing details (www.zebroo.de/license).
 name: Prebuild generic images
 
 # Baut die projektunabhaengigen Images und schiebt sie in die zodoo-Registry.
@@ -56,11 +57,31 @@ concurrency:
 
 jobs:
   prebuild:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || 'zebroo-tools' }}
     timeout-minutes: 120
     env:
       VERSIONS: ${{ github.event.inputs.versions || '19.0,20.0' }}
     steps:
+      - name: Isolate job home and tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$RUNNER_ENVIRONMENT" == "self-hosted" ]]; then
+            if [[ "${ZEBROO_DOCKER_ISOLATED:-}" != "1" || -z "${DOCKER_HOST:-}" ]]; then
+              echo "::error::An isolated Docker service must be configured for this runner."
+              exit 1
+            fi
+          fi
+          job_home=$(mktemp -d "$RUNNER_TEMP/tools-home.XXXXXX")
+          mkdir -p "$job_home/.local/bin" "$job_home/pipx" "$job_home/tmp" "$job_home/.docker"
+          {
+            echo "HOME=$job_home"
+            echo "PIPX_HOME=$job_home/pipx"
+            echo "PIPX_BIN_DIR=$job_home/.local/bin"
+            echo "TMPDIR=$job_home/tmp"
+            echo "DOCKER_CONFIG=$job_home/.docker"
+          } >> "$GITHUB_ENV"
+          echo "$job_home/.local/bin" >> "$GITHUB_PATH"
       - uses: actions/checkout@v4
 
       - name: Set up Python
@@ -185,7 +206,7 @@ jobs:
             version="$(echo "$version" | xargs)"
             [ -n "$version" ] || continue
             echo "::group::Odoo $version"
-            project="/tmp/prebuild-${version}"
+            project="${RUNNER_TEMP}/prebuild-${version}"
             rm -rf "$project"
             # Ein Wegwerf-Projekt: gebraucht wird nur ein gueltiger
             # zodoo-Kontext, damit die Tags genauso berechnet werden wie
