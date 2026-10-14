@@ -1,0 +1,3 @@
+type: fix
+description: "Router: der Platzhalter-vHost faengt unbekannte Domains ab (404), statt sie an den alphabetisch ersten vHost zu geben"
+breaking: false
