@@ -20,7 +20,7 @@ DASHBOARD_LOKI_RETENTION=168h
 # zodoo gehoeren. Nuetzlich auf einer Maschine, die einem allein gehoert und
 # auf der man beim Suchen nicht ueberlegen will, wem ein Container gehoert.
 DASHBOARD_LOGS_ALL_CONTAINERS=0
-# Password for the proxy's password-only gate on /system, /logs and /logs2
+# Password for the proxy's password-only gate on /system and /logs
 # (no username; see proxy/lua/dashauth.lua). Left empty here: auto-generated
 # on non-DEVMODE instances (see __after_settings.py) and skipped entirely in
 # DEVMODE (empty -> gate disabled, no prompt).

@@ -1,0 +1,3 @@
+type: fix
+description: "Odoo loggt auf echten Instanzen standardmäßig nur noch ab warn (bisher faktisch debug), bei DEVMODE=1 info. Ein gesetztes ODOO_LOG_LEVEL gilt weiter; warning wird zu warn. Außerdem: /logs2 entfällt und leitet auf /logs um (Explore war seit Grafana 11 für Viewer gesperrt)."
+breaking: false

@@ -42,7 +42,7 @@ Or edit the files directly. Run `odoo reload` after manual edits.
 
 | Setting                  | Default | Description                                                                                                                                                            |
 | ------------------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ODOO_LOG_LEVEL`         | `debug` | Odoo log level: `debug`, `info`, `warning`, `error`, `critical`.                                                                                                       |
+| `ODOO_LOG_LEVEL`         | empty   | Odoo log level: `debug`, `info`, `warn`, `error`, `critical`. Empty: `warn` on real instances, `info` with `DEVMODE=1`. `warning` is accepted and written as `warn`. |
 | `ODOO_DEBUG_LOGLEVEL`    | `info`  | Log level inside the debug container.                                                                                                                                  |
 | `ODOO_MAX_CRON_THREADS`  | `2`     | Cron threads of the cronjobs role. Web server, queue jobs, update and debug keep the value from their own config file.                                                 |
 | `ODOO_WORKERS_WEB`       | `6`     | Number of Odoo web worker processes.                                                                                                                                   |

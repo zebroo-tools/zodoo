@@ -15,7 +15,9 @@ RUN_AUTOSETUP=1
 RUN_MIGRATION=0
 
 ODOO_DEMO=0
-ODOO_LOG_LEVEL=debug
+# Leer = automatisch: warn auf echten Instanzen, info bei DEVMODE=1
+# (siehe odoo/__after_settings.py).
+ODOO_LOG_LEVEL=
 ODOO_RUN_TESTS=0
 
 ODOO_MAX_CRON_THREADS=2
