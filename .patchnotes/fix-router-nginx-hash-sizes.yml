@@ -1,3 +1,0 @@
-type: fix
-description: "Router: server_names/variables hash sizes raised so nginx no longer warns on every reload with a few hundred vHosts"
-breaking: false

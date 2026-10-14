@@ -1,5 +1,13 @@
 # Changelog
 
+## 12.7.4
+
+- **Fix**: Router: der Platzhalter-vHost faengt unbekannte Domains ab (404), statt sie an den alphabetisch ersten vHost zu geben
+- **Fix**: cadvisor auf v0.52.1 (Docker 29 lehnt API 1.41 ab, CPU-/RAM-Panels waren leer); Link-Leiste Overview/Logs/Log-Explorer oben in beiden Dashboards; erzeugte Gate-Passwoerter (Dashboard/Logs/Coding) werden in die Projekt-Settings geschrieben und aendern sich beim reload nicht mehr
+- **Fix**: Odoo loggt auf echten Instanzen standardmäßig nur noch ab warn (bisher faktisch debug), bei DEVMODE=1 info. Ein gesetztes ODOO_LOG_LEVEL gilt weiter; warning wird zu warn. Außerdem: /logs2 entfällt und leitet auf /logs um (Explore war seit Grafana 11 für Viewer gesperrt).
+- **Fix**: Router: server_names/variables hash sizes raised so nginx no longer warns on every reload with a few hundred vHosts
+
+
 ## 12.7.3
 
 - **Fix**: Router: certbot und Plugins auf feste Versionen (certbot 5.8.0, dns-ionos 2024.11.9), renew-all.sh ohne --nginx, damit DNS-01-Zertifikate nicht auf HTTP-01 zurückfallen
