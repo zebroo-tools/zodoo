@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.7.3
+
+- **Fix**: Router: certbot und Plugins auf feste Versionen (certbot 5.8.0, dns-ionos 2024.11.9), renew-all.sh ohne --nginx, damit DNS-01-Zertifikate nicht auf HTTP-01 zurückfallen
+
+
 ## 12.7.2
 
 - **Fix**: Installer, CLI und Projektvorlagen verwenden zebroo-tools; Robot-Setup erkennt bestehende alte und neue Einbindungen ohne Duplikate.
