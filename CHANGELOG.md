@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.8.1
+
+- **Fix**: PGBR_VERSION zaehlt jetzt zum Image-Tag von postgres und pgbackrest. Bisher stand nur POSTGRES_VERSION in registry_tag.yml, obwohl die Dockerfiles pgbackrest nur bei gesetztem PGBR_VERSION installieren und dann auf diese Version festnageln. Wer pgBackRest in einem Projekt einschaltete, bekam deshalb aus der Registry das alte Image unter unveraendertem Tag zurueck - ein postgres ohne pgbackrest. Sichtbar wurde das erst viel spaeter im postgres-Log als "archive_command failed with exit code 127" bzw. "pgbackrest: command not found"; der Notbehelf war "odoo build postgres --no-zodoo-pull". Pruefen: in einem Projekt PGBR_VERSION aendern, "odoo reload" und "odoo build postgres pgbackrest" - beide Images werden jetzt unter einem neuen Tag gebaut statt aus der Registry gezogen, und "odoo pgbackrest verify" meldet dieselbe Version fuer Sidecar und postgres.
+
+
 ## 12.8.0
 
 - **Feature**: Proxy records the last real (human) request in proxy_exchange/last_activity; new command `odoo last-activity [--json]` reads it. Monitoring, health checks and the open-tab bus are not counted.
