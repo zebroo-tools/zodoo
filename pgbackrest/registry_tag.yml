@@ -2,6 +2,13 @@
 # (psql, pg_isready) have to match the server, so two projects on different
 # majors must not share one image.
 #
+# PGBR_VERSION is the exception: it is not runtime configuration but a build
+# argument that pins the installed package
+# (`pgbackrest${PGBR_VERSION:+=${PGBR_VERSION}-*}`). Outside the tag, changing
+# it would resolve to the image built with the old version, and sidecar and
+# postgres would drift apart - the `ProtocolError` that `odoo pgbackrest
+# verify` warns about.
+#
 # Everything else that configures the backup - repository, retention, schedule,
 # certificates - arrives through the environment and the mounted configuration
 # at runtime, and deliberately does NOT enter the tag. Otherwise two projects
@@ -9,6 +16,7 @@
 # two different tags.
 settings:
   - POSTGRES_VERSION
+  - PGBR_VERSION
 tag_prefix:
   - POSTGRES_VERSION
 generation: 2
