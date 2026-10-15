@@ -1,3 +1,0 @@
-type: fix
-description: "pgbackrest verify: nach einem Restore-Zeitablauf bleiben Container und Wegwerf-Volume nicht mehr liegen; Restore-Zeitlimit je Bereich einstellbar (restore_timeout)"
-breaking: false

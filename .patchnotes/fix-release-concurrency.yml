@@ -1,3 +1,0 @@
-type: internal
-description: "Release workflow: several merges in a row no longer turn the older release runs red. Only the run for the current tip of main releases (and takes all open patchnotes along), release runs no longer overlap."
-breaking: false
