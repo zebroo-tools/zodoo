@@ -150,6 +150,27 @@ To use a different catch-all, put your own entry with
 `template: default_server` in `vhosts.yml` — a hand-written one wins and
 nothing is appended.
 
+### Plain HTTP on a TLS vhost
+
+A vhost that terminates TLS gets a second, small server block on port 80 that
+answers `301` to the HTTPS address. It is rendered for every vhost with TLS,
+`use_certbot` included.
+
+That last part used to be certbot's job, and it did not hold. certbot writes
+its redirect block into the **delivered** file; the next render overwrites
+that file, and `_reinstall_certbot_tls` carries back the TLS directives alone
+— a whole server block must not end up nested inside another one. So every
+template change quietly took port 80 away from a few more vhosts. On
+hy-router it had reached 17 of 163, `hosting.zebroo.de` and `ntfy.zebroo.de`
+among them; with the catch-all vhost in place they answered 404 on plain HTTP.
+
+For `use_certbot` vhosts the block keeps `/.well-known/acme-challenge/` open
+instead of redirecting it: HTTP-01 is validated over plain HTTP, and the
+first certificate is issued when there is nothing on 443 to redirect to yet.
+
+A vhost without TLS gets no such block — its own server block is the one
+listening on port 80.
+
 ### Optional fields
 
 | Field                                        | Type       | Meaning                                                                                                                               |
