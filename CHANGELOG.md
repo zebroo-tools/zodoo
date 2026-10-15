@@ -1,5 +1,13 @@
 # Changelog
 
+## 12.8.0
+
+- **Feature**: Proxy records the last real (human) request in proxy_exchange/last_activity; new command `odoo last-activity [--json]` reads it. Monitoring, health checks and the open-tab bus are not counted.
+- **Fix**: Backup bricht nicht mehr an der Postgres-Warnung „collation version mismatch“ ab. Nach dem Wechsel der postgres-Abbilder auf bookworm (glibc 2.31 → 2.36) gab es auf neu gebauten Hosts keinen nächtlichen Dump mehr, obwohl pg_dump fehlerfrei durchlief. Die Warnung steht jetzt laut im Backup-Log, Reindex + REFRESH COLLATION VERSION bleiben nötig.
+- **Fix**: Router: certbot vhosts keep their HTTP-to-HTTPS redirect across re-renders
+- **Fix**: `odoo status` (läuft auch am Ende von `odoo update` und `odoo up -d`) zeigt Dashboard-Passwort und DEFAULT_DEV_PASSWORD nur noch maskiert. Mit `odoo status --show-secrets` kommen sie wie bisher.
+
+
 ## 12.7.5
 
 - **Fix**: cadvisor auf v0.55.1: mit dem containerd-Image-Store von Docker 29 konnte v0.52.1 die Container nicht anlegen, CPU-/RAM-Panels blieben leer

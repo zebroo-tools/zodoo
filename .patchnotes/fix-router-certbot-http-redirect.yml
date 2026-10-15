@@ -1,3 +1,0 @@
-type: fix
-description: "Router: certbot vhosts keep their HTTP-to-HTTPS redirect across re-renders"
-breaking: false
