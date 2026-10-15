@@ -1,0 +1,3 @@
+type: feature
+description: "Proxy records the last real (human) request in proxy_exchange/last_activity; new command `odoo last-activity [--json]` reads it. Monitoring, health checks and the open-tab bus are not counted."
+breaking: false
