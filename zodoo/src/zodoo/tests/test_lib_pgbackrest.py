@@ -23,6 +23,7 @@ from pathlib import Path
 
 import arrow
 import pytest
+import yaml
 
 from .conftest import _run, requires_full_stack
 
@@ -1655,3 +1656,43 @@ def test_policy_without_a_value_changes_nothing(tmp_path):
 
     assert p._speichere_vorgabe(config, {}) is None
     assert "EFFECTIVE" not in datei.read_text()
+
+
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+
+
+def _images_with_pgbr_build_arg():
+    """Image directories whose build passes PGBR_VERSION to the Dockerfile."""
+    found = []
+    for compose in sorted(_REPO_ROOT.glob("*/docker-compose.yml")):
+        if "$PGBR_VERSION" in compose.read_text():
+            found.append(compose.parent)
+    return found
+
+
+def test_pgbr_version_is_part_of_the_image_tag():
+    """A baked-in version has to reach the tag, or the registry lies.
+
+    PGBR_VERSION is a build argument: the Dockerfiles install pgbackrest only
+    when it is set, and pin the package when it is. The registry tag, however,
+    is computed from the settings listed in ``registry_tag.yml`` - so while
+    PGBR_VERSION was missing there, a project that introduced pgBackRest got
+    the previously built image back under an identical tag: a postgres
+    WITHOUT pgbackrest. It fails much later and far away, as
+    ``archive_command failed with exit code 127`` in the postgres log.
+    The same omission hides a version change between sidecar and postgres,
+    which is the drift ``odoo pgbackrest verify`` can only warn about.
+    """
+    images = _images_with_pgbr_build_arg()
+    assert images, "no image passes PGBR_VERSION as a build argument anymore"
+    for image_dir in images:
+        tag_file = image_dir / "registry_tag.yml"
+        assert tag_file.exists(), (
+            f"{image_dir.name} bakes in PGBR_VERSION but has no "
+            "registry_tag.yml - it would fall back to the global tag"
+        )
+        settings = yaml.safe_load(tag_file.read_text()).get("settings") or []
+        assert "PGBR_VERSION" in settings, (
+            f"{image_dir.name}/registry_tag.yml must list PGBR_VERSION under "
+            "settings, otherwise changing it does not change the image tag"
+        )

@@ -1,4 +1,14 @@
+# PGBR_VERSION belongs here because the Dockerfiles bake it in: pgbackrest is
+# installed only when the build argument is set, and pinned to that version
+# when it is (`pgbackrest${PGBR_VERSION:+=${PGBR_VERSION}-*}`). Left out of the
+# tag, a project that sets or changes PGBR_VERSION still resolves to the image
+# built without it - the registry hands out a postgres without pgbackrest under
+# a tag that looks right. That shows up much later as
+# `archive_command failed with exit code 127` / `pgbackrest: command not found`,
+# or as the protocol mismatch between sidecar and postgres that
+# `odoo pgbackrest verify` warns about.
 settings:
   - POSTGRES_VERSION
+  - PGBR_VERSION
 tag_prefix:
   - POSTGRES_VERSION
