@@ -949,6 +949,12 @@ VERIFY_STARTUP_TIMEOUT = 300
 # Je Bereich ueberschreibbar (Pruefstand: "max_backup_age" in stanzas).
 VERIFY_MAX_BACKUP_AGE = 36 * 3600
 
+# Wie lange das Zurueckspielen dauern darf. Ein grosser Bereich braucht
+# laenger (powerhouse_cicd, ~26 GB: 1600-2700 s, im Oktober 2026 auch ueber
+# 3600 s). Je Bereich ueberschreibbar (Pruefstand: "restore_timeout" in
+# stanzas).
+VERIFY_RESTORE_TIMEOUT = 3600
+
 # Was Postgres beim Wiederherstellen mindestens so gross braucht wie auf der
 # Quelle, sonst: "recovery aborted because of insufficient parameter settings".
 # Links der Name in pg_controldata, rechts der Serverparameter.
@@ -1425,13 +1431,39 @@ def _verify_start_and_read(postgres_image, volume, mounts, container):
 
 
 def _verify_cleanup(container, volume):
-    for cmd in (("rm", "-f", container), ("volume", "rm", "-f", volume)):
+    """Container und Wegwerf-Volume der Probe entfernen.
+
+    Zurueck kommt None oder ein Vermerk, was liegengeblieben ist. Das Ergebnis
+    der Probe kippt das nicht - aber verschluckt werden darf es auch nicht:
+    im Oktober 2026 haben stillschweigend liegengebliebene Volumes den
+    Pruefstand vollgemacht.
+
+    Ein Zeitablauf in _docker beendet nur den docker-CLIENT; der Container
+    dahinter laeuft weiter und haelt das Volume. Deshalb werden vor dem Volume
+    alle Container entfernt, die es noch eingehaengt haben - auch namenlose
+    Hilfscontainer.
+    """
+    fehler = []
+
+    def versuche(*cmd):
         try:
-            _docker(*cmd, check=False, timeout=300)
-        except (
-            Exception
-        ):  # noqa: BLE001 - Aufraeumen darf nie das Ergebnis kippen
-            pass
+            return _docker(*cmd, check=False, timeout=300)
+        except Exception as ex:  # noqa: BLE001 - Aufraeumen kippt nichts
+            fehler.append(f"docker {' '.join(cmd)}: {type(ex).__name__}: {ex}")
+            return None
+
+    out = versuche("ps", "-aq", "--filter", f"volume={volume}")
+    halter = out.stdout.split() if out is not None and not out.returncode else []
+    # "No such container" fuer laengst entfernte Namen ist hier normal und
+    # wird deshalb nicht vermerkt.
+    versuche("rm", "-f", container, f"{container}-restore", *halter)
+    out = versuche("volume", "rm", "-f", volume)
+    if out is not None and out.returncode:
+        fehler.append(
+            f"Volume {volume} nicht entfernt: "
+            + (out.stderr or out.stdout or "").strip()
+        )
+    return "\n".join(fehler)[-1000:] or None
 
 
 def _probe(umgebung, stanza):
@@ -1516,9 +1548,14 @@ def _probe(umgebung, stanza):
         # --type=immediate: bis zum Ende der Sicherung, nicht weiter. Die Frage
         # ist "laeuft sie wieder an", nicht "spiele WAL bis heute nach" - das
         # waere eine andere Frage und dauert um Groessenordnungen laenger.
+        #
+        # Mit Namen: laeuft die Zeit ab, laeuft der Container weiter und muss
+        # beim Aufraeumen auffindbar sein.
         _docker(
             "run",
             "--rm",
+            "--name",
+            f"{container}-restore",
             "-v",
             f"{volume}:{VERIFY_PGDATA}",
             *sum((["-v", m] for m in mounts), []),
@@ -1528,7 +1565,7 @@ def _probe(umgebung, stanza):
             "restore",
             "--type=immediate",
             "--target-action=promote",
-            timeout=3600,
+            timeout=umgebung.get("restore_timeout") or VERIFY_RESTORE_TIMEOUT,
         )
         ergebnis.update(
             _verify_start_and_read(pg_image, volume, mounts, container)
@@ -1546,7 +1583,9 @@ def _probe(umgebung, stanza):
             f"{type(ex).__name__}: {ex}\n" + traceback.format_exc()
         )[-2000:]
     finally:
-        _verify_cleanup(container, volume)
+        liegengeblieben = _verify_cleanup(container, volume)
+        if liegengeblieben:
+            ergebnis["cleanup_error"] = liegengeblieben
 
     ergebnis["seconds"] = int(time.time() - begonnen)
     return ergebnis
@@ -1881,6 +1920,9 @@ def run_verify_bench(bench, stanza):
         umgebung["max_backup_age"] = eigen.get(
             "max_backup_age", VERIFY_MAX_BACKUP_AGE
         )
+        umgebung["restore_timeout"] = eigen.get(
+            "restore_timeout", VERIFY_RESTORE_TIMEOUT
+        )
     except VerifyFailed as ex:
         shutil.rmtree(arbeitsordner, ignore_errors=True)
         return {
@@ -2134,6 +2176,12 @@ def pgbackrest_verify(config, stanza, as_json, report_to, bench_config):
                 f"{ergebnis['area']}: Rueckspielprobe GESCHEITERT - "
                 f"{ergebnis.get('error')}",
                 fg="red",
+            )
+        if not as_json and ergebnis.get("cleanup_error"):
+            click.secho(
+                f"{ergebnis['area']}: nicht aufgeraeumt - "
+                f"{ergebnis['cleanup_error']}",
+                fg="yellow",
             )
 
     if any(e["result"] != "passed" for e in ergebnisse):

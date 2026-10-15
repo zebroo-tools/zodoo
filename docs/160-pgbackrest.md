@@ -514,6 +514,15 @@ the verify bench the limit can be set per area with `max_backup_age` (seconds)
 in `stanzas`, e.g. for an area that only backs up weekly. The proof file
 carries `backup_stop` and `backup_age`.
 
+The restore itself may take one hour by default. A large area needs longer;
+on the bench set `restore_timeout` (seconds) for it in `stanzas`. When the
+time runs out, only the docker client is stopped — the restore container keeps
+running and holds the throwaway volume. `verify` therefore names that container
+and, when cleaning up, removes every container that still has the volume
+mounted before removing the volume. Anything left behind anyway is written to
+the proof file as `cleanup_error` and printed after the result, instead of
+filling the disk unnoticed.
+
 Two traps in `repo-verify`, both learned the hard way:
 
 - **`pgbackrest verify` exits 0 even when it found problems.** The verdict is
