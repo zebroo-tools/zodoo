@@ -108,6 +108,10 @@ Show project name, Odoo version, database connection URL, and key config
 values. (Also reachable as `odoo setup status`; `odoo status` is the direct,
 unambiguous form.)
 
+Passwords (dashboard password, `DEFAULT_DEV_PASSWORD`) are masked, because the
+same output closes `odoo update` and `odoo up -d` and ends up in CI logs and
+terminal transcripts. `odoo status --show-secrets` prints them.
+
 ### `odoo setup remove-web-assets`
 
 Fix broken CSS/JS. Clears web assets from database; they are regenerated on next admin login.

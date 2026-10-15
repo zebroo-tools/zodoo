@@ -54,7 +54,7 @@ class _MissingFile:
         return False
 
 
-def _run(**kwargs):
+def _run(show_secrets=False, **kwargs):
     lines = []
     cfg = FakeConfig(**kwargs)
     orig = click.secho
@@ -68,7 +68,7 @@ def _run(**kwargs):
 
     click.secho = fake_secho
     try:
-        mod._status(cfg)
+        mod._status(cfg, show_secrets=show_secrets)
     finally:
         click.secho = orig
     return [line for line, _ in lines]
@@ -87,9 +87,51 @@ def test_status_hides_monitoring_when_dashboard_off():
     assert not [x for x in lines if "monitoring" in x or "/logs" in x]
 
 
-def test_status_shows_monitoring_password_when_set():
-    lines = _run(DASHBOARD_PASSWORD="secret")
+def test_status_masks_secrets_by_default():
+    """`odoo update` and `odoo up -d` end with this output. On 15.10.2026 it
+    put the dashboard password and DEFAULT_DEV_PASSWORD of a production
+    instance into a chat transcript."""
+    lines = _run(
+        DASHBOARD_PASSWORD="pw-dash-123", DEFAULT_DEV_PASSWORD="pw-dev-456"
+    )
+    assert not [x for x in lines if "pw-dash-123" in x or "pw-dev-456" in x]
+    assert "monitoring password: " + mod.MASK in lines
+    assert "DEFAULT_DEV_PASSWORD:" + mod.MASK in lines
+
+
+def test_status_shows_secrets_on_request():
+    lines = _run(
+        show_secrets=True,
+        DASHBOARD_PASSWORD="secret",
+        DEFAULT_DEV_PASSWORD="devpw",
+    )
     assert "monitoring password: secret" in lines
+    assert "DEFAULT_DEV_PASSWORD:devpw" in lines
+
+
+def test_status_keeps_harmless_settings_visible():
+    lines = _run()
+    assert "ODOO_QUEUEJOBS_CHANNELS:root:1" in lines
+    assert "ODOO_DEMO:True" in lines
+
+
+def test_status_command_masks_by_default():
+    """The click command itself - this is what `Commands.invoke(ctx, "status")`
+    after `odoo update` runs."""
+    from click.testing import CliRunner
+
+    seen = {}
+    orig = mod._status
+    mod._status = lambda config, show_secrets=False: seen.update(
+        s=show_secrets
+    )
+    try:
+        CliRunner().invoke(mod.status, [], obj=FakeConfig())
+        assert seen == {"s": False}
+        CliRunner().invoke(mod.status, ["--show-secrets"], obj=FakeConfig())
+        assert seen == {"s": True}
+    finally:
+        mod._status = orig
 
 
 def test_status_monitoring_urls_for_every_domain():
