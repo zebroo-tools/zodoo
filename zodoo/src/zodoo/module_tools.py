@@ -252,6 +252,41 @@ class DBModules:
         return rows
 
     @classmethod
+    def get_data_footprint(clazz, module):
+        """Models and extra fields a module brought along; these are what an
+        uninstall drops, so they are shown before uninstalling without source.
+        """
+        with get_conn_autoclose() as cr:
+            cr.execute(
+                "select m.model from ir_model m "
+                "join ir_model_data d on d.model = 'ir.model' "
+                "and d.res_id = m.id where d.module = %s order by 1",
+                (module,),
+            )
+            models = [row[0] for row in cr.fetchall()]
+            cr.execute(
+                "select count(*) from ir_model_data "
+                "where module = %s and model = 'ir.model.fields'",
+                (module,),
+            )
+            field_count = cr.fetchone()[0]
+        return models, field_count
+
+    @classmethod
+    def get_installed_dependents(clazz, module):
+        """Installed modules that declare a dependency on ``module``."""
+        with get_conn_autoclose() as cr:
+            cr.execute(
+                "select m.name from ir_module_module_dependency d "
+                "join ir_module_module m on m.id = d.module_id "
+                "where d.name = %s "
+                "and m.state in ('installed', 'to install', 'to upgrade') "
+                "order by 1",
+                (module,),
+            )
+            return [row[0] for row in cr.fetchall()]
+
+    @classmethod
     def get_outdated_installed_modules(clazz, mods):
         odoo_version = current_version()
         for mod in clazz.get_all_installed_modules():
