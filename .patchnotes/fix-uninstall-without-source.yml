@@ -1,3 +1,0 @@
-type: fix
-description: "MANIFEST uninstall: modules without source no longer crash odoo update; they are only uninstalled after confirmation (#279)"
-breaking: false

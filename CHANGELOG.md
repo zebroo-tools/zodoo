@@ -1,5 +1,11 @@
 # Changelog
 
+## 12.7.5
+
+- **Fix**: cadvisor auf v0.55.1: mit dem containerd-Image-Store von Docker 29 konnte v0.52.1 die Container nicht anlegen, CPU-/RAM-Panels blieben leer
+- **Fix**: MANIFEST uninstall: modules without source no longer crash odoo update; they are only uninstalled after confirmation (#279)
+
+
 ## 12.7.4
 
 - **Fix**: Router: der Platzhalter-vHost faengt unbekannte Domains ab (404), statt sie an den alphabetisch ersten vHost zu geben
