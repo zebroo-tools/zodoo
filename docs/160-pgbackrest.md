@@ -520,8 +520,23 @@ time runs out, only the docker client is stopped — the restore container keeps
 running and holds the throwaway volume. `verify` therefore names that container
 and, when cleaning up, removes every container that still has the volume
 mounted before removing the volume. Anything left behind anyway is written to
-the proof file as `cleanup_error` and printed after the result, instead of
-filling the disk unnoticed.
+the proof file as `cleanup_error` — with docker's own reason, not just "volume
+is in use" — and printed after the result, instead of filling the disk
+unnoticed. The result of the probe itself stays as it was: a leftover volume
+does not make the backup worse.
+
+`restore_timeout` must be whole seconds greater than zero. Anything else
+(`"7200"` as a string, `0`, `null`, `true`) fails the probe for that area with
+"restore_timeout … ungueltig" before anything is restored.
+
+A hard abort — SIGKILL, the OOM killer, a reboot — skips the cleanup and leaves
+no note. So every probe first looks for `verify_*` volumes older than 12 hours
+and lists them as `leftovers` in its proof file (and in yellow after the
+result), for as long as they exist. They are only reported, never deleted:
+which of them may go is decided by a person. Younger ones are left alone,
+because they can belong to the probe running in parallel. On the backup
+machine, `zebroo-backup-metrics` counts proofs with `cleanup_error` or
+`leftovers` for the alarm.
 
 Two traps in `repo-verify`, both learned the hard way:
 
