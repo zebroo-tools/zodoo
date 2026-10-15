@@ -51,7 +51,11 @@ LABEL = "zodoo.cadvisor.spec"
 # Dann scheitert die Docker-Factory still, cadvisor meldet nur noch "/" und die
 # CPU-/RAM-Panels pro Container bleiben leer. Ab v0.52 handelt der Client die
 # API-Version aus.
-ABBILD = "gcr.io/cadvisor/cadvisor:v0.52.1"
+# Mit dem containerd-Image-Store von Docker 29 (Treiber "overlayfs" statt
+# overlay2/zfs) findet v0.52 die Container zwar, kann sie aber nicht anlegen
+# ("failed to identify the read-write layer ID") -- gleiches Bild, leere
+# Panels. v0.54 kann den Store; getestet mit v0.55.1 auf overlayfs und zfs.
+ABBILD = "gcr.io/cadvisor/cadvisor:v0.55.1"
 
 # Dieselben Argumente wie zuvor im Stapel der Instanz, siehe
 # dashboard/docker-compose.yml und CHANGELOG zu v11.4.x:

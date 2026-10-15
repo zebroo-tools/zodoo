@@ -1,0 +1,3 @@
+type: fix
+description: "cadvisor auf v0.55.1: mit dem containerd-Image-Store von Docker 29 konnte v0.52.1 die Container nicht anlegen, CPU-/RAM-Panels blieben leer"
+breaking: false
