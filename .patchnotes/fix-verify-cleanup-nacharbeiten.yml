@@ -1,3 +1,0 @@
-type: fix
-description: "pgbackrest verify: restore_timeout wird geprüft, Docker-Fehler beim Aufräumen bleiben im Vermerk, liegengebliebene verify_*-Volumes werden als leftovers gemeldet"
-breaking: false

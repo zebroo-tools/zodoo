@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.8.3
+
+- **Fix**: pgbackrest verify: restore_timeout wird geprüft, Docker-Fehler beim Aufräumen bleiben im Vermerk, liegengebliebene verify_*-Volumes werden als leftovers gemeldet
+
+
 ## 12.8.2
 
 - **Internal**: Release workflow: several merges in a row no longer turn the older release runs red. Only the run for the current tip of main releases (and takes all open patchnotes along), release runs no longer overlap.
