@@ -1,12 +1,5 @@
 {% set _ssl_on = (item.ssl_key_is_on_destination is defined and item.ssl_key_is_on_destination) or (item.ssl_server_cert is defined and item.ssl_server_cert) or (item.ssl_self_signed is defined and item.ssl_self_signed) %}
-{% if _ssl_on %}
-# Redirect plain HTTP to HTTPS for {{ item.server_name }}.
-server {
-    listen 80;
-    server_name  {{ item.server_name }};
-    return 301 https://$host$request_uri;
-}
-{% endif %}
+{% include "_http_redirect.inc" %}
 server {
         server_name  {{ item.server_name }};
         keepalive_timeout 60;
