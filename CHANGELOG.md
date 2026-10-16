@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.8.4
+
+- **Fix**: Router: ein vHost, der sein erstes Let's-Encrypt-Zertifikat bekommt, landet nicht mehr in einer HTTPS-Weiterleitungsschleife - setup_ssl.py bindet das Zertifikat selbst im Proxy-Block ein, statt certbot den Weiterleitungsblock wählen zu lassen (#294).
+
+
 ## 12.8.3
 
 - **Fix**: pgbackrest verify: restore_timeout wird geprüft, Docker-Fehler beim Aufräumen bleiben im Vermerk, liegengebliebene verify_*-Volumes werden als leftovers gemeldet
