@@ -67,7 +67,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "[Overview](/system) &nbsp;|&nbsp; [Logs](/logs) &nbsp;|&nbsp; [Log explorer](/logs2)"
+        "content": "<a href=\"/system\" target=\"_self\">Overview</a> &nbsp;|&nbsp; <a href=\"/logs\" target=\"_self\">Logs</a>"
       }
     },
     {
