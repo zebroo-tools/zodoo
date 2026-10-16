@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.8.5
+
+- **Fix**: Monitoring-Dashboard: die Link-Leiste oben (Overview | Logs) führt wieder zur richtigen Seite statt auf „Page not found“ unter /system/logs. Der Eintrag „Log explorer“ entfällt, er zeigte seit dem Wegfall von /logs2 nur noch auf /logs.
+
+
 ## 12.8.4
 
 - **Fix**: Router: ein vHost, der sein erstes Let's-Encrypt-Zertifikat bekommt, landet nicht mehr in einer HTTPS-Weiterleitungsschleife - setup_ssl.py bindet das Zertifikat selbst im Proxy-Block ein, statt certbot den Weiterleitungsblock wählen zu lassen (#294).
