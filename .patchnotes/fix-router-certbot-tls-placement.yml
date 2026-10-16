@@ -1,0 +1,3 @@
+type: fix
+description: "Router: ein vHost, der sein erstes Let's-Encrypt-Zertifikat bekommt, landet nicht mehr in einer HTTPS-Weiterleitungsschleife - setup_ssl.py bindet das Zertifikat selbst im Proxy-Block ein, statt certbot den Weiterleitungsblock wählen zu lassen (#294)."
+breaking: false
