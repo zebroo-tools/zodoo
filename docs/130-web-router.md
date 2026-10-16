@@ -171,6 +171,23 @@ first certificate is issued when there is nothing on 443 to redirect to yet.
 A vhost without TLS gets no such block — its own server block is the one
 listening on port 80.
 
+### Where the certificate gets bound
+
+With the redirect block in front, two server blocks listen on port 80 for the
+same name. `certbot --nginx` and `certbot install` pick the first of them, so
+`listen 443 ssl` landed in the redirect block and HTTPS answered with a `301`
+to itself. That happened to every domain getting its first certificate
+(`quattro-test-machine-3c305b.zebroo.de`, 2026-10-15).
+
+`bin/setup_ssl.py` therefore no longer lets certbot edit the vhost. A new
+domain is issued with `certbot certonly --nginx`, which only fetches the
+certificate, with `nginx -s reload` stored as deploy hook so renewals still
+reload nginx. The TLS lines are written by the script itself, right below the
+`# SSL_CERTIFICATE_ANSIBLE` placeholder in the proxy block, with certbot's
+`# managed by Certbot` marker so the fast restore after a re-render still
+recognises them. Only a file without the placeholder still goes through
+`certbot install`.
+
 ### Optional fields
 
 | Field                                        | Type       | Meaning                                                                                                                               |
