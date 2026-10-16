@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Part of Zebroo GmbH. See LICENSE file for full copyright and licensing details (www.zebroo.de/license).
 """Generate the provisioned Grafana dashboards.
 
 Hand-editing multi-panel Grafana JSON is painful, so the dashboards are

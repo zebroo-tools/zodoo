@@ -1,3 +1,4 @@
+# Part of Zebroo GmbH. See LICENSE file for full copyright and licensing details (www.zebroo.de/license).
 """Unit tests for the monitoring dashboard service.
 
 Fast, no Docker: they exercise the dashboard generator and the custom Odoo
