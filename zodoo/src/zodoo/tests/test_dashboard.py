@@ -8,6 +8,7 @@ test venv.
 
 import importlib.util
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -51,6 +52,25 @@ def test_generator_matches_committed(tmp_path):
             f"{name}.json is out of date -- rerun "
             "dashboard/grafana/generate_dashboard.py"
         )
+
+
+def test_nav_links_bypass_grafana_router():
+    """Link bar targets must be loaded by the browser, not Grafana's router.
+
+    Grafana routes clicks on links without a target inside its app below
+    root_url /system/, so /logs ended up as /system/logs (page not found).
+    Every link needs target="_self" and has to hit a proxy entry point.
+    """
+    conf = (REPO_ROOT / "dashboard" / "proxy" / "dashboard.conf").read_text()
+    for name in ("zodoo-overview", "zodoo-logs"):
+        data = json.loads((DASHBOARDS / f"{name}.json").read_text())
+        content = data["panels"][0]["options"]["content"]
+        anchors = re.findall(r"<a ([^>]*)>", content)
+        assert anchors, f"{name}: no links in the link bar"
+        for attrs in anchors:
+            assert 'target="_self"' in attrs, f"{name}: {attrs}"
+            href = re.search(r'href="([^"]+)"', attrs).group(1)
+            assert f"location = {href} " in conf, f"{name}: {href}"
 
 
 def _load_exporter(monkeypatch):

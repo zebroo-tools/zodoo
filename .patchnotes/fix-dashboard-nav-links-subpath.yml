@@ -1,0 +1,3 @@
+type: fix
+description: "Monitoring-Dashboard: die Link-Leiste oben (Overview | Logs) führt wieder zur richtigen Seite statt auf „Page not found“ unter /system/logs. Der Eintrag „Log explorer“ entfällt, er zeigte seit dem Wegfall von /logs2 nur noch auf /logs."
+breaking: false

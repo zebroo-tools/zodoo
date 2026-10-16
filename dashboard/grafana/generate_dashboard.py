@@ -195,7 +195,13 @@ def nav(y):
     A panel instead of dashboard "links": /system opens in kiosk mode, which
     hides Grafana's top bar and with it the dashboard links. The targets are
     the proxy's friendly redirects (see dashboard/proxy/dashboard.conf).
+
+    Plain markdown links do not work here: Grafana intercepts clicks on
+    links without a target and routes them inside its app, below root_url
+    /system/ -- /logs became /system/logs (page not found). target="_self"
+    makes the browser load the URL itself, so the proxy redirect applies.
     """
+    links = (("Overview", "/system"), ("Logs", "/logs"))
     return {
         "id": nid(),
         "type": "text",
@@ -204,9 +210,9 @@ def nav(y):
         "gridPos": gp(0, y, 24, 2),
         "options": {
             "mode": "markdown",
-            "content": (
-                "[Overview](/system) &nbsp;|&nbsp; [Logs](/logs)"
-                " &nbsp;|&nbsp; [Log explorer](/logs2)"
+            "content": " &nbsp;|&nbsp; ".join(
+                f'<a href="{href}" target="_self">{label}</a>'
+                for label, href in links
             ),
         },
     }
