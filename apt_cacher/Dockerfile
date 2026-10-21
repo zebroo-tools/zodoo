@@ -38,11 +38,13 @@ RUN printf '%s\n' \
       squid-deb-proxy-client && \
     apt-get clean
 
-# Copy init script
-COPY entrypoint.sh /data/entrypoint.sh
+# Init script lives outside /data: /data is a named volume, and docker only
+# seeds a volume from the image when it is created - an entrypoint in there
+# would never pick up changes on existing hosts.
+COPY entrypoint.sh /entrypoint.sh
 COPY squid/etc/extra-sources.acl /data/squid/etc/extra-sources.acl
 COPY squid/etc/mirror-dstdomain.acl.d/* /data/squid/etc/mirror-dstdomain.acl.d
-RUN chmod +x /data/entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 # Handle user and paths
 RUN ln -sf /data/squid/cache /var/cache/squid-deb-proxy
@@ -53,6 +55,6 @@ RUN ln -sf /data/squid/etc/extra-sources.acl /etc/squid-deb-proxy/mirror-dstdoma
 
 EXPOSE 8000/tcp
 
-ENTRYPOINT ["/bin/bash", "/data/entrypoint.sh"]
+ENTRYPOINT ["/bin/bash", "/entrypoint.sh"]
 
 COPY squid/etc/10-extra.conf /etc/squid-deb-proxy/conf.d/10-extra.conf
