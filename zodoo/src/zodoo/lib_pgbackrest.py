@@ -955,6 +955,20 @@ VERIFY_MAX_BACKUP_AGE = 36 * 3600
 # stanzas).
 VERIFY_RESTORE_TIMEOUT = 3600
 
+# Wie lange die Gegenstelle (Repo-Host per TLS) auf den naechsten Befehl
+# wartet. Bei `verify` lesen die Worker, waehrend die Verbindung des
+# Hauptprozesses ruht; dauert das laenger als der pgBackRest-Standard
+# (1830 s), gibt der Repo-Host auf ("timeout after 1860000ms waiting for
+# read", beim Pruefstand als "TLS error ... unexpected eof"). So brach die
+# Bestandspruefung von powerhouse_cicd am 11. und 18.10.2026 ab. Unterhalb
+# der 4 h, die der docker-Aufruf von repo-verify bekommt, damit pgBackRest
+# seinen eigenen Fehler meldet und nicht nur der Docker-Client abbricht.
+# Muss groesser sein als db-timeout (Standard 1800 s), sonst verweigert
+# pgBackRest den Start. Je Bereich ueberschreibbar (Pruefstand:
+# "protocol_timeout" in stanzas).
+VERIFY_PROTOCOL_TIMEOUT = 3 * 3600
+VERIFY_DB_TIMEOUT = 1800
+
 # Ab wann ein fremdes verify_*-Volume als liegengeblieben gilt. Juenger kann es
 # die Probe sein, die gerade daneben laeuft (der Pruefstand faehrt zwei
 # gleichzeitig; Budget 4 h plus Restore-Zeitlimit).
@@ -1704,6 +1718,27 @@ BENCH_PFLICHTFELDER_S3 = (
 )
 
 
+def _protocol_timeout(bench, stanza):
+    """protocol-timeout fuer die pgbackrest.conf des Pruefstands, geprueft.
+
+    Ein ungueltiger Wert soll als Konfigurationsfehler auffallen und nicht
+    erst als Startfehler von pgBackRest im Container.
+    """
+    wert = bench.get("protocol_timeout", VERIFY_PROTOCOL_TIMEOUT)
+    # bool ist in Python ein int - `true` waere sonst eine Sekunde.
+    if (
+        isinstance(wert, bool)
+        or not isinstance(wert, int)
+        or wert <= VERIFY_DB_TIMEOUT
+    ):
+        raise VerifyFailed(
+            f"protocol_timeout fuer {stanza} ungueltig: {wert!r} "
+            f"(erwartet: ganze Sekunden > {VERIFY_DB_TIMEOUT}, "
+            "pgBackRest verlangt mehr als db-timeout)"
+        )
+    return wert
+
+
 def bench_conf_text(bench, stanza):
     """Die pgbackrest.conf, mit der der Pruefstand liest.
 
@@ -1762,6 +1797,7 @@ def bench_conf_text(bench, stanza):
         "log-level-console=info",
         "log-level-file=off",
         "process-max=4",
+        f"protocol-timeout={_protocol_timeout(bench, stanza)}",
         "",
         f"[{stanza}]",
         f"pg1-path={VERIFY_PGDATA}",
