@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.8.6
+
+- **Fix**: apt-cacher (squid-deb-proxy) starts again after `docker restart`: a stale pid file no longer makes squid exit with "Squid is already running", which left port 3142 closed and broke every image build using the proxy.
+
+
 ## 12.8.5
 
 - **Fix**: Monitoring-Dashboard: die Link-Leiste oben (Overview | Logs) führt wieder zur richtigen Seite statt auf „Page not found“ unter /system/logs. Der Eintrag „Log explorer“ entfällt, er zeigte seit dem Wegfall von /logs2 nur noch auf /logs.

@@ -1,3 +1,0 @@
-type: fix
-description: 'apt-cacher (squid-deb-proxy) starts again after `docker restart`: a stale pid file no longer makes squid exit with "Squid is already running", which left port 3142 closed and broke every image build using the proxy.'
-breaking: false
