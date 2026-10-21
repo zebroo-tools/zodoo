@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.8.7
+
+- **Fix**: pgbackrest verify/repo-verify auf dem Prüfstand: protocol-timeout 3 h statt 31 min, je Bereich als protocol_timeout einstellbar
+
+
 ## 12.8.6
 
 - **Fix**: apt-cacher (squid-deb-proxy) starts again after `docker restart`: a stale pid file no longer makes squid exit with "Squid is already running", which left port 3142 closed and broke every image build using the proxy.
