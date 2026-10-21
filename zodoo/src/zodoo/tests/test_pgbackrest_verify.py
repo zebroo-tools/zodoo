@@ -1837,3 +1837,68 @@ def test_leftovers_are_only_reported_never_deleted(monkeypatch):
         "verify_alt_0000000001" in a and a[0] in ("rm", "volume") and "rm" in a
         for a in docker.aufrufe
     ), docker.aufrufe
+
+
+def test_the_bench_config_sets_a_generous_protocol_timeout():
+    """Die Gegenstelle darf nicht nach 31 min aufgeben, waehrend gelesen wird.
+
+    So brach die Bestandspruefung von powerhouse_cicd am 11. und 18.10.2026
+    ab: "timeout after 1860000ms waiting for read" auf dem Repo-Host.
+    """
+    text = lp.bench_conf_text(BENCH, "kunde-a")
+    assert f"protocol-timeout={lp.VERIFY_PROTOCOL_TIMEOUT}" in text
+    assert lp.VERIFY_PROTOCOL_TIMEOUT > 1860
+
+
+def test_the_protocol_timeout_can_be_set_per_area(monkeypatch, tmp_path):
+    """Ueber stanzas wie restore_timeout - landet in der pgbackrest.conf."""
+    monkeypatch.setattr(lp.os, "chown", lambda *a, **kw: None)
+    cert = tmp_path / "cert"
+    cert.mkdir()
+    for f in ("ca.crt", "client.crt", "client.key"):
+        (cert / f).write_text("x")
+    confs = []
+
+    def docker(*args, **kw):
+        for i, a in enumerate(args):
+            if a == "-v" and args[i + 1].split(":")[1] == "/etc/pgbackrest":
+                ordner = args[i + 1].split(":")[0]
+                with open(f"{ordner}/pgbackrest.conf") as fh:
+                    confs.append(fh.read())
+        return mock.Mock(stdout="", stderr="", returncode=0)
+
+    monkeypatch.setattr(lp, "_docker", docker)
+    bench = dict(
+        BENCH,
+        cert_dir=str(cert),
+        stanzas={"gross": {"protocol_timeout": 5 * STUNDE}},
+    )
+    lp.run_repo_verify_bench(bench, "kunde-a")
+    lp.run_repo_verify_bench(bench, "gross")
+
+    assert len(confs) == 2
+    assert f"protocol-timeout={lp.VERIFY_PROTOCOL_TIMEOUT}" in confs[0]
+    assert f"protocol-timeout={5 * STUNDE}" in confs[1]
+
+
+@pytest.mark.parametrize("wert", ["7200", 1800, 600, 0, True, None, 1.5])
+def test_an_invalid_protocol_timeout_is_a_config_error(monkeypatch, tmp_path, wert):
+    """pgBackRest verlangt protocol-timeout > db-timeout (1800 s).
+
+    Sonst stiege es erst im Container aus - als Bestand "nicht durchgelaufen",
+    nicht als Fehler in der Konfiguration.
+    """
+    gerufen = []
+    monkeypatch.setattr(lp.os, "chown", lambda *a, **kw: None)
+    monkeypatch.setattr(lp, "_docker", lambda *a, **kw: gerufen.append(a))
+    cert = tmp_path / "cert"
+    cert.mkdir()
+    for f in ("ca.crt", "client.crt", "client.key"):
+        (cert / f).write_text("x")
+    bench = dict(
+        BENCH, cert_dir=str(cert), stanzas={"gross": {"protocol_timeout": wert}}
+    )
+    erg = lp.run_repo_verify_bench(bench, "gross")
+    assert gerufen == []
+    assert erg["result"] == "failed"
+    assert "protocol_timeout" in erg["error"]

@@ -529,6 +529,16 @@ does not make the backup worse.
 (`"7200"` as a string, `0`, `null`, `true`) fails the probe for that area with
 "restore_timeout … ungueltig" before anything is restored.
 
+The bench also writes `protocol-timeout` into its pgbackrest.conf, by default
+3 hours. During `repo-verify` the workers read while the connection of the main
+process sits idle; with pgBackRest's own default (1830 s) the repository host
+gives up after about 31 minutes ("timeout after 1860000ms waiting for read",
+seen on the bench as "TLS error … unexpected eof while reading"). Large areas
+need longer than that. Set `protocol_timeout` (seconds) per area in `stanzas`
+if 3 hours is not enough; it must be greater than 1800 (pgBackRest's
+`db-timeout`), otherwise the area fails with "protocol_timeout … ungueltig"
+before pgBackRest starts.
+
 A hard abort — SIGKILL, the OOM killer, a reboot — skips the cleanup and leaves
 no note. So every probe first looks for `verify_*` volumes older than 12 hours
 and lists them as `leftovers` in its proof file (and in yellow after the
