@@ -12,8 +12,12 @@ tests continue to work because they don't depend on it.
 from __future__ import annotations
 
 import os
+import queue
 import shutil
+import signal
 import subprocess
+import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -55,12 +59,34 @@ requires_full_stack = pytest.mark.skipif(
 )
 
 
-def _run(cmd, *, cwd, env=None, timeout=None, check=True):
+def _run(
+    cmd, *, cwd, env=None, timeout=None, check=True, stream=False, stall_timeout=None
+):
+    """Run ``cmd`` and return a CompletedProcess.
+
+    By default output is captured and printed after the process ends. With
+    ``stream=True`` stdout and stderr are merged and echoed line by line while
+    the command runs (returned as ``stdout``, ``stderr`` is empty). Use it for
+    the long build steps: a captured run that hits ``timeout`` loses all of its
+    output, so a hanging build leaves no trace of where it hung.
+    ``stall_timeout`` (stream mode only) aborts when no line arrived for that
+    many seconds, instead of sitting out the full ``timeout``.
+    """
     full_env = os.environ.copy()
     if env:
         full_env.update(env)
     cmd_str = " ".join(str(x) for x in cmd)
     print(f"\n$ {cmd_str}    (cwd={cwd})", flush=True)
+    if stream:
+        return _run_streaming(
+            cmd,
+            cmd_str,
+            cwd=cwd,
+            env=full_env,
+            timeout=timeout,
+            stall_timeout=stall_timeout,
+            check=check,
+        )
     result = subprocess.run(
         [str(x) for x in cmd],
         cwd=str(cwd),
@@ -78,6 +104,66 @@ def _run(cmd, *, cwd, env=None, timeout=None, check=True):
             f"Command failed (exit {result.returncode}): {cmd_str}\n"
             f"--- stdout (last 2000 chars) ---\n{(result.stdout or '')[-2000:]}\n"
             f"--- stderr (last 2000 chars) ---\n{(result.stderr or '')[-2000:]}"
+        )
+    return result
+
+
+def _run_streaming(cmd, cmd_str, *, cwd, env, timeout, stall_timeout, check):
+    proc = subprocess.Popen(
+        [str(x) for x in cmd],
+        cwd=str(cwd),
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        errors="replace",
+        # Own process group, so a timeout also stops the docker/compose
+        # children instead of leaving them running on the CI runner.
+        start_new_session=True,
+    )
+    lines = queue.Queue()
+
+    def _reader():
+        for line in proc.stdout:
+            lines.put(line)
+        lines.put(None)
+
+    threading.Thread(target=_reader, daemon=True).start()
+
+    output = []
+    started = last_line = time.monotonic()
+    while True:
+        try:
+            line = lines.get(timeout=5)
+        except queue.Empty:
+            line = ""
+        if line is None:
+            break
+        now = time.monotonic()
+        if line:
+            output.append(line)
+            print(line, end="", flush=True)
+            last_line = now
+        reason = None
+        if timeout and now - started > timeout:
+            reason = f"timed out after {timeout}s"
+        elif stall_timeout and now - last_line > stall_timeout:
+            reason = f"no output for {stall_timeout}s"
+        if reason:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait()
+            tail = "".join(output[-60:])
+            raise AssertionError(
+                f"Command {reason}: {cmd_str}\n--- last output ---\n{tail}"
+            )
+    proc.wait()
+    result = subprocess.CompletedProcess(
+        proc.args, proc.returncode, "".join(output), ""
+    )
+    if check and result.returncode != 0:
+        raise AssertionError(
+            f"Command failed (exit {result.returncode}): {cmd_str}\n"
+            f"--- output (last 2000 chars) ---\n{result.stdout[-2000:]}"
         )
     return result
 

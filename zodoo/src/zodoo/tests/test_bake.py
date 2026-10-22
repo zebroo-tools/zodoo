@@ -55,6 +55,11 @@ def test_bake_flow(version, isolated_home, tmp_path):
     # cache, including the Python-from-source compile in the prebuilt-python
     # image when ODOO_PYTHON_VERSION hasn't been pushed to the registry yet.
     long_timeout = 60 * 60
+    # Streamed with a stall guard: a hanging step fails after 20 quiet minutes
+    # and shows its last output, instead of burning the full hour silently.
+    # Docker builds print a line at least per layer, so 20 minutes without any
+    # output means stuck, not slow.
+    heavy = dict(timeout=long_timeout, stream=True, stall_timeout=20 * 60)
 
     try:
         # 1) Initialise a fresh project. `odoo src init` ends with sys.exit(0)
@@ -72,7 +77,7 @@ def test_bake_flow(version, isolated_home, tmp_path):
                 version,
             ],
             cwd=project_dir.parent,
-            timeout=long_timeout,
+            **heavy,
         )
 
         # 2) Reload + build — init's internal reload runs without `-p`
@@ -81,19 +86,19 @@ def test_bake_flow(version, isolated_home, tmp_path):
         _run(
             ["odoo", "-p", project_name, "reload"],
             cwd=project_dir,
-            timeout=long_timeout,
+            **heavy,
         )
         _run(
             ["odoo", "-p", project_name, "build", "--no-zodoo-pull"],
             cwd=project_dir,
-            timeout=long_timeout,
+            **heavy,
         )
 
         # 3) Reset database.
         _run(
             ["odoo", "-f", "-p", project_name, "db", "reset"],
             cwd=project_dir,
-            timeout=long_timeout,
+            **heavy,
         )
 
         # 4) Bake — this is the actual assertion target.
@@ -110,7 +115,7 @@ def test_bake_flow(version, isolated_home, tmp_path):
                 "ODOO_DEMO=1",
             ],
             cwd=project_dir,
-            timeout=long_timeout,
+            **heavy,
         )
 
         # 5) Bake should have produced <project_name>.env in the customs dir.
