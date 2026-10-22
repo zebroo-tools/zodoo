@@ -98,7 +98,7 @@ the same schema as the ansible `web_router.virtual_hosts` list. JSON works just
 as well: the file is read with `yaml.safe_load`, and YAML is a superset of JSON.
 
 A complete, commented example is in
-[`router_global/vhosts.example.yml`](https://github.com/Odoo-Ninjas/zodoo/blob/main/router_global/vhosts.example.yml).
+[`router_global/vhosts.example.yml`](https://github.com/zebroo-tools/zodoo/blob/main/router_global/vhosts.example.yml).
 
 ```yaml
 - template: upstream_direct_odoo
@@ -119,10 +119,74 @@ A complete, commented example is in
 | `redirect`                  | `server_name`, `redirect_to`                                                  | Redirect to another address.                                               |
 | `static_files`              | `server_name`, `folder`                                                       | Serve a directory.                                                         |
 | `existing_ssl_certificates` | `server_name`                                                                 | Certificate block only, no backend.                                        |
+| `default_server`            | nothing — the router adds it itself                                           | The catch-all for unknown names (see below).                               |
 
 With a custom certificate (`ssl_key_is_on_destination` or `ssl_server_cert`)
 `certificate_name` becomes required as well — it is the directory name under
 `/etc/ssl/custom_ssl/`.
+
+### The catch-all vhost
+
+Every router renders one extra vhost that is not in `vhosts.yml`:
+`sites-enabled/00_default`. It carries `default_server` on both ports and
+answers 404 for every name the router does not serve, including a call to the
+bare IP.
+
+It exists because nginx otherwise promotes the **first server block it parses**
+to the default — and the blocks are pulled in by `include sites-enabled/*`,
+that is, by filename. Deploying a vhost whose name happens to sort first then
+silently hands it all stray traffic. On hy-router a newly added
+`3dm-monitoring.zebroo.de` did exactly that: from that moment the bare router
+IP, and every unknown domain pointing at it, was redirected into an internal
+monitoring site.
+
+Its certificate is self-signed (`custom_ssl/_default/`) — whoever lands here
+asked for a name this router does not serve, so no certificate could match
+anyway, and nginx needs one to answer on 443 at all. ACME challenges stay
+reachable through it, because a certificate is validated before the vhost it
+belongs to exists.
+
+To use a different catch-all, put your own entry with
+`template: default_server` in `vhosts.yml` — a hand-written one wins and
+nothing is appended.
+
+### Plain HTTP on a TLS vhost
+
+A vhost that terminates TLS gets a second, small server block on port 80 that
+answers `301` to the HTTPS address. It is rendered for every vhost with TLS,
+`use_certbot` included.
+
+That last part used to be certbot's job, and it did not hold. certbot writes
+its redirect block into the **delivered** file; the next render overwrites
+that file, and `_reinstall_certbot_tls` carries back the TLS directives alone
+— a whole server block must not end up nested inside another one. So every
+template change quietly took port 80 away from a few more vhosts. On
+hy-router it had reached 17 of 163, `hosting.zebroo.de` and `ntfy.zebroo.de`
+among them; with the catch-all vhost in place they answered 404 on plain HTTP.
+
+For `use_certbot` vhosts the block keeps `/.well-known/acme-challenge/` open
+instead of redirecting it: HTTP-01 is validated over plain HTTP, and the
+first certificate is issued when there is nothing on 443 to redirect to yet.
+
+A vhost without TLS gets no such block — its own server block is the one
+listening on port 80.
+
+### Where the certificate gets bound
+
+With the redirect block in front, two server blocks listen on port 80 for the
+same name. `certbot --nginx` and `certbot install` pick the first of them, so
+`listen 443 ssl` landed in the redirect block and HTTPS answered with a `301`
+to itself. That happened to every domain getting its first certificate
+(`quattro-test-machine-3c305b.zebroo.de`, 2026-10-15).
+
+`bin/setup_ssl.py` therefore no longer lets certbot edit the vhost. A new
+domain is issued with `certbot certonly --nginx`, which only fetches the
+certificate, with `nginx -s reload` stored as deploy hook so renewals still
+reload nginx. The TLS lines are written by the script itself, right below the
+`# SSL_CERTIFICATE_ANSIBLE` placeholder in the proxy block, with certbot's
+`# managed by Certbot` marker so the fast restore after a re-render still
+recognises them. Only a file without the placeholder still goes through
+`certbot install`.
 
 ### Optional fields
 
@@ -147,8 +211,8 @@ If `redirect_to` contains a `/`, everything lands exactly there. Without a path
 the requested path is appended (`$request_uri`):
 
 ```yaml
-redirect_to: zebroo.de                     # /foo  ->  zebroo.de/foo
-redirect_to: zebroo.de/zebroo-experience   # /foo  ->  zebroo.de/zebroo-experience
+redirect_to: zebroo.de # /foo  ->  zebroo.de/foo
+redirect_to: zebroo.de/zebroo-experience # /foo  ->  zebroo.de/zebroo-experience
 ```
 
 ## Offline / self-signed TLS

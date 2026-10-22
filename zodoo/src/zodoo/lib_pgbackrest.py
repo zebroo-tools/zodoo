@@ -949,6 +949,31 @@ VERIFY_STARTUP_TIMEOUT = 300
 # Je Bereich ueberschreibbar (Pruefstand: "max_backup_age" in stanzas).
 VERIFY_MAX_BACKUP_AGE = 36 * 3600
 
+# Wie lange das Zurueckspielen dauern darf. Ein grosser Bereich braucht
+# laenger (powerhouse_cicd, ~26 GB: 1600-2700 s, im Oktober 2026 auch ueber
+# 3600 s). Je Bereich ueberschreibbar (Pruefstand: "restore_timeout" in
+# stanzas).
+VERIFY_RESTORE_TIMEOUT = 3600
+
+# Wie lange die Gegenstelle (Repo-Host per TLS) auf den naechsten Befehl
+# wartet. Bei `verify` lesen die Worker, waehrend die Verbindung des
+# Hauptprozesses ruht; dauert das laenger als der pgBackRest-Standard
+# (1830 s), gibt der Repo-Host auf ("timeout after 1860000ms waiting for
+# read", beim Pruefstand als "TLS error ... unexpected eof"). So brach die
+# Bestandspruefung von powerhouse_cicd am 11. und 18.10.2026 ab. Unterhalb
+# der 4 h, die der docker-Aufruf von repo-verify bekommt, damit pgBackRest
+# seinen eigenen Fehler meldet und nicht nur der Docker-Client abbricht.
+# Muss groesser sein als db-timeout (Standard 1800 s), sonst verweigert
+# pgBackRest den Start. Je Bereich ueberschreibbar (Pruefstand:
+# "protocol_timeout" in stanzas).
+VERIFY_PROTOCOL_TIMEOUT = 3 * 3600
+VERIFY_DB_TIMEOUT = 1800
+
+# Ab wann ein fremdes verify_*-Volume als liegengeblieben gilt. Juenger kann es
+# die Probe sein, die gerade daneben laeuft (der Pruefstand faehrt zwei
+# gleichzeitig; Budget 4 h plus Restore-Zeitlimit).
+VERIFY_LEFTOVER_AGE = 12 * 3600
+
 # Was Postgres beim Wiederherstellen mindestens so gross braucht wie auf der
 # Quelle, sonst: "recovery aborted because of insufficient parameter settings".
 # Links der Name in pg_controldata, rechts der Serverparameter.
@@ -1425,13 +1450,92 @@ def _verify_start_and_read(postgres_image, volume, mounts, container):
 
 
 def _verify_cleanup(container, volume):
-    for cmd in (("rm", "-f", container), ("volume", "rm", "-f", volume)):
+    """Container und Wegwerf-Volume der Probe entfernen.
+
+    Zurueck kommt None oder ein Vermerk, was liegengeblieben ist. Das Ergebnis
+    der Probe kippt das nicht - aber verschluckt werden darf es auch nicht:
+    im Oktober 2026 haben stillschweigend liegengebliebene Volumes den
+    Pruefstand vollgemacht.
+
+    Ein Zeitablauf in _docker beendet nur den docker-CLIENT; der Container
+    dahinter laeuft weiter und haelt das Volume. Deshalb werden vor dem Volume
+    alle Container entfernt, die es noch eingehaengt haben - auch namenlose
+    Hilfscontainer.
+    """
+    fehler = []
+
+    def versuche(*cmd):
         try:
-            _docker(*cmd, check=False, timeout=300)
-        except (
-            Exception
-        ):  # noqa: BLE001 - Aufraeumen darf nie das Ergebnis kippen
-            pass
+            return _docker(*cmd, check=False, timeout=300)
+        except Exception as ex:  # noqa: BLE001 - Aufraeumen kippt nichts
+            fehler.append(f"docker {' '.join(cmd)}: {type(ex).__name__}: {ex}")
+            return None
+
+    def meldung(out):
+        return (out.stderr or out.stdout or "").strip()
+
+    out = versuche("ps", "-aq", "--filter", f"volume={volume}")
+    halter = []
+    if out is not None and out.returncode:
+        fehler.append(f"Container am Volume nicht ermittelbar: {meldung(out)}")
+    elif out is not None:
+        halter = out.stdout.split()
+    out = versuche("rm", "-f", container, f"{container}-restore", *halter)
+    if out is not None and out.returncode:
+        # "No such container" fuer laengst entfernte Namen ist hier normal
+        # (--rm, oder es kam gar nicht so weit) und kein Befund. Alles andere
+        # ist der eigentliche Grund, warum das Volume gleich nicht weggeht.
+        rest = [
+            z
+            for z in meldung(out).splitlines()
+            if z.strip() and "No such container" not in z
+        ]
+        if rest:
+            fehler.append("Container nicht entfernt: " + "\n".join(rest))
+    out = versuche("volume", "rm", "-f", volume)
+    if out is not None and out.returncode:
+        fehler.append(
+            f"Volume {volume} nicht entfernt: "
+            + (out.stderr or out.stdout or "").strip()
+        )
+    return "\n".join(fehler)[-1000:] or None
+
+
+def _verify_leftovers(jetzt):
+    """Alte verify_*-Volumes, die eine fruehere Probe hinterlassen hat.
+
+    _verify_cleanup laeuft im `finally` - bei SIGKILL, OOM oder einem Neustart
+    laeuft es nicht, und dann vermerkt auch niemand etwas. Deshalb sieht jede
+    Probe vorher nach, ob noch etwas herumliegt, und meldet es, solange es da
+    ist. Geloescht wird hier bewusst nichts: was ein Volume enthaelt, das
+    niemand mehr zuordnen kann, entscheidet ein Mensch.
+    """
+    try:
+        out = _docker(
+            "volume", "ls", "-q", "--filter", "name=verify_",
+            check=False, timeout=120,
+        )
+        namen = [
+            n for n in (out.stdout or "").split() if n.startswith("verify_")
+        ]
+        if not namen:
+            return []
+        out = _docker(
+            "volume", "inspect", "-f", "{{.Name}} {{.CreatedAt}}", *namen,
+            check=False, timeout=120,
+        )
+    except Exception:  # noqa: BLE001 - die Probe selbst haengt nicht daran
+        return []
+    alt = []
+    for zeile in (out.stdout or "").splitlines():
+        name, _, angelegt = zeile.partition(" ")
+        try:
+            stamp = arrow.get(angelegt.strip()).int_timestamp
+        except (arrow.parser.ParserError, ValueError, TypeError):
+            continue
+        if jetzt - stamp > VERIFY_LEFTOVER_AGE:
+            alt.append(name)
+    return sorted(alt)[:20]
 
 
 def _probe(umgebung, stanza):
@@ -1466,6 +1570,9 @@ def _probe(umgebung, stanza):
         # Sorte Luecke, wegen der es diese Probe ueberhaupt gibt.
         "store": umgebung.get("store") or "-",
     }
+    reste = _verify_leftovers(int(begonnen))
+    if reste:
+        ergebnis["leftovers"] = reste
     try:
         ergebnis["backup"], db_version, stop = _verify_latest_backup(
             None, stanza, pgbr_image, mounts, run_user
@@ -1516,9 +1623,14 @@ def _probe(umgebung, stanza):
         # --type=immediate: bis zum Ende der Sicherung, nicht weiter. Die Frage
         # ist "laeuft sie wieder an", nicht "spiele WAL bis heute nach" - das
         # waere eine andere Frage und dauert um Groessenordnungen laenger.
+        #
+        # Mit Namen: laeuft die Zeit ab, laeuft der Container weiter und muss
+        # beim Aufraeumen auffindbar sein.
         _docker(
             "run",
             "--rm",
+            "--name",
+            f"{container}-restore",
             "-v",
             f"{volume}:{VERIFY_PGDATA}",
             *sum((["-v", m] for m in mounts), []),
@@ -1528,7 +1640,7 @@ def _probe(umgebung, stanza):
             "restore",
             "--type=immediate",
             "--target-action=promote",
-            timeout=3600,
+            timeout=umgebung.get("restore_timeout", VERIFY_RESTORE_TIMEOUT),
         )
         ergebnis.update(
             _verify_start_and_read(pg_image, volume, mounts, container)
@@ -1546,7 +1658,9 @@ def _probe(umgebung, stanza):
             f"{type(ex).__name__}: {ex}\n" + traceback.format_exc()
         )[-2000:]
     finally:
-        _verify_cleanup(container, volume)
+        liegengeblieben = _verify_cleanup(container, volume)
+        if liegengeblieben:
+            ergebnis["cleanup_error"] = liegengeblieben
 
     ergebnis["seconds"] = int(time.time() - begonnen)
     return ergebnis
@@ -1602,6 +1716,27 @@ BENCH_PFLICHTFELDER_S3 = (
     "s3_key_secret",
     "pgbackrest_image",
 )
+
+
+def _protocol_timeout(bench, stanza):
+    """protocol-timeout fuer die pgbackrest.conf des Pruefstands, geprueft.
+
+    Ein ungueltiger Wert soll als Konfigurationsfehler auffallen und nicht
+    erst als Startfehler von pgBackRest im Container.
+    """
+    wert = bench.get("protocol_timeout", VERIFY_PROTOCOL_TIMEOUT)
+    # bool ist in Python ein int - `true` waere sonst eine Sekunde.
+    if (
+        isinstance(wert, bool)
+        or not isinstance(wert, int)
+        or wert <= VERIFY_DB_TIMEOUT
+    ):
+        raise VerifyFailed(
+            f"protocol_timeout fuer {stanza} ungueltig: {wert!r} "
+            f"(erwartet: ganze Sekunden > {VERIFY_DB_TIMEOUT}, "
+            "pgBackRest verlangt mehr als db-timeout)"
+        )
+    return wert
 
 
 def bench_conf_text(bench, stanza):
@@ -1662,6 +1797,7 @@ def bench_conf_text(bench, stanza):
         "log-level-console=info",
         "log-level-file=off",
         "process-max=4",
+        f"protocol-timeout={_protocol_timeout(bench, stanza)}",
         "",
         f"[{stanza}]",
         f"pg1-path={VERIFY_PGDATA}",
@@ -1881,6 +2017,19 @@ def run_verify_bench(bench, stanza):
         umgebung["max_backup_age"] = eigen.get(
             "max_backup_age", VERIFY_MAX_BACKUP_AGE
         )
+        umgebung["restore_timeout"] = eigen.get(
+            "restore_timeout", VERIFY_RESTORE_TIMEOUT
+        )
+        # bool ist in Python ein int - `true` waere sonst eine Sekunde.
+        if (
+            isinstance(umgebung["restore_timeout"], bool)
+            or not isinstance(umgebung["restore_timeout"], int)
+            or umgebung["restore_timeout"] <= 0
+        ):
+            raise VerifyFailed(
+                f"restore_timeout fuer {stanza} ungueltig: "
+                f"{umgebung['restore_timeout']!r} (erwartet: ganze Sekunden > 0)"
+            )
     except VerifyFailed as ex:
         shutil.rmtree(arbeitsordner, ignore_errors=True)
         return {
@@ -2134,6 +2283,18 @@ def pgbackrest_verify(config, stanza, as_json, report_to, bench_config):
                 f"{ergebnis['area']}: Rueckspielprobe GESCHEITERT - "
                 f"{ergebnis.get('error')}",
                 fg="red",
+            )
+        if not as_json and ergebnis.get("leftovers"):
+            click.secho(
+                f"{ergebnis['area']}: liegengebliebene Volumes einer frueheren "
+                f"Probe - {', '.join(ergebnis['leftovers'])}",
+                fg="yellow",
+            )
+        if not as_json and ergebnis.get("cleanup_error"):
+            click.secho(
+                f"{ergebnis['area']}: nicht aufgeraeumt - "
+                f"{ergebnis['cleanup_error']}",
+                fg="yellow",
             )
 
     if any(e["result"] != "passed" for e in ergebnisse):

@@ -1,0 +1,1 @@
+Settings files rewritten as root (e.g. `sudo -E odoo reload` with `DEVMODE=1`, which stores the next free port) now keep their previous owner; a new file gets the owner of its directory. Before, `~/.odoo/settings.<project>` ended up as root:root 0600 and the cicd failed to overwrite it on dump restore ("scp: Permission denied").

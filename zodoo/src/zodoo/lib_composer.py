@@ -1,3 +1,4 @@
+# Part of Zebroo GmbH. See LICENSE file for full copyright and licensing details (www.zebroo.de/license).
 import traceback
 import re
 import socket
@@ -869,7 +870,7 @@ def _download_images(config, images_url):
     if not config.dirs["images"].exists():
         click.secho("Please install zodoo now with:", fg="red")
         click.secho(
-            "bash <(curl -fsSL https://raw.githubusercontent.com/Odoo-Ninjas/zodoo/refs/heads/main/install.sh)"
+            "bash <(curl -fsSL https://raw.githubusercontent.com/zebroo-tools/zodoo/refs/heads/main/install.sh)"
         )
         sys.exit(-1)
     if config.ODOO_IMAGES_BRANCH:

@@ -1483,8 +1483,9 @@ def test_a_stale_backup_fails_the_probe(monkeypatch):
     assert erg["result"] == "failed"
     assert "zu alt" in erg["error"]
     assert erg["backup_age"] == 50 * STUNDE
-    # Eine zu alte Sicherung braucht man nicht erst zurueckzuspielen.
-    assert zurueckgespielt == []
+    # Eine zu alte Sicherung braucht man nicht erst zurueckzuspielen. (Nur
+    # nachgesehen wird, ob alte Volumes herumliegen - das legt nichts an.)
+    assert [a for a in zurueckgespielt if a[:2] != ("volume", "ls")] == []
 
 
 def test_a_fresh_backup_passes_and_its_age_is_recorded(monkeypatch):
@@ -1527,3 +1528,377 @@ def test_the_age_limit_can_be_set_per_area(monkeypatch, tmp_path):
 
     assert gerufen[0]["max_backup_age"] == lp.VERIFY_MAX_BACKUP_AGE
     assert gerufen[1]["max_backup_age"] == 8 * 86400
+
+
+# --------------------------------------------------------------------------- #
+# Aufraeumen nach einem Zeitablauf                                             #
+# --------------------------------------------------------------------------- #
+
+
+class FakeDocker:
+    """Ein docker, der mitschreibt und bei Bedarf haengenbleibt.
+
+    `haengt` ist ein Merkmal der Kommandozeile (z.B. "restore"): passt es,
+    gibt es wie im echten Fall ein TimeoutExpired - der Container dahinter
+    laeuft weiter und haelt das Volume.
+    """
+
+    def __init__(self, haengt=None, volume_rm_rc=0, antworten=None):
+        self.aufrufe = []
+        self.haengt = haengt
+        self.volume_rm_rc = volume_rm_rc
+        # Anfang der Kommandozeile -> (rc, stdout, stderr) oder eine Ausnahme
+        self.antworten = antworten or {}
+
+    def __call__(self, *args, timeout=1800, check=True):
+        self.aufrufe.append(args)
+        if self.haengt and self.haengt in args:
+            raise lp.subprocess.TimeoutExpired(["docker", *args], timeout)
+        for anfang, antwort in self.antworten.items():
+            if args[: len(anfang)] == anfang:
+                if isinstance(antwort, Exception):
+                    raise antwort
+                rc, stdout, stderr = antwort
+                return mock.Mock(returncode=rc, stdout=stdout, stderr=stderr)
+        if args[:2] == ("volume", "rm") and self.volume_rm_rc:
+            return mock.Mock(
+                returncode=self.volume_rm_rc,
+                stdout="",
+                stderr="Error response from daemon: volume is in use",
+            )
+        return mock.Mock(returncode=0, stdout="", stderr="")
+
+    def restore_name(self):
+        for args in self.aufrufe:
+            if "restore" in args and "--name" in args:
+                return args[args.index("--name") + 1]
+        return None
+
+
+def _probe_bis_zum_restore(monkeypatch, docker):
+    monkeypatch.setattr(lp.time, "time", lambda: JETZT)
+    monkeypatch.setattr(
+        lp,
+        "_verify_latest_backup",
+        lambda *a, **kw: ("20261012-020001D", "17", JETZT - 3 * STUNDE),
+    )
+    monkeypatch.setattr(lp, "_verify_pg_image", lambda *a: "pg")
+    monkeypatch.setattr(lp, "_docker", docker)
+    monkeypatch.setattr(
+        lp,
+        "_verify_start_and_read",
+        lambda *a: {"database": "db", "table": "t", "rows": 1},
+    )
+
+
+def test_a_restore_that_times_out_leaves_no_container_behind(monkeypatch):
+    """12.10.2026: der Restore von powerhouse_cicd lief ueber 3600 s.
+
+    Der Zeitablauf beendet nur den docker-CLIENT. Der Restore-Container lief
+    namenlos weiter und hielt das Volume, `volume rm` scheiterte still - sieben
+    solcher Volumes (178 GB) haben den Pruefstand vollgemacht. Deshalb hat der
+    Restore-Container einen Namen und wird vor dem Volume entfernt.
+    """
+    docker = FakeDocker(haengt="restore")
+    _probe_bis_zum_restore(monkeypatch, docker)
+
+    erg = lp._probe(dict(UMGEBUNG), "kunde")
+
+    assert erg["result"] == "failed"
+    assert "TimeoutExpired" in erg["error"]
+    name = docker.restore_name()
+    assert name, "der Restore-Container braucht einen Namen"
+    entfernt = [a for a in docker.aufrufe if a[:2] == ("rm", "-f")]
+    assert any(name in a for a in entfernt), entfernt
+    reihenfolge = [a[:2] for a in docker.aufrufe]
+    assert reihenfolge.index(("volume", "rm")) > max(
+        i for i, a in enumerate(docker.aufrufe) if name in a and a[0] == "rm"
+    )
+
+
+def test_containers_still_holding_the_volume_are_removed(monkeypatch):
+    """Auch ein namenloser Hilfscontainer (chown, pg_controldata) darf das
+    Volume nicht festhalten - aufgeraeumt wird alles, was es eingehaengt hat."""
+    docker = FakeDocker(haengt="restore")
+    _probe_bis_zum_restore(monkeypatch, docker)
+
+    lp._probe(dict(UMGEBUNG), "kunde")
+
+    abfragen = [a for a in docker.aufrufe if a[:2] == ("ps", "-aq")]
+    assert abfragen, docker.aufrufe
+    assert any(
+        any(x.startswith("volume=verify_kunde_") for x in a) for a in abfragen
+    )
+
+
+def test_a_failed_volume_removal_is_reported_not_swallowed(monkeypatch):
+    """Ein liegengebliebenes Volume muss im Nachweis stehen.
+
+    Das Ergebnis der Probe kippt es nicht - die Sicherung ist deswegen nicht
+    schlechter. Aber ohne den Vermerk merkt es erst die volle Platte.
+    """
+    docker = FakeDocker(volume_rm_rc=1)
+    _probe_bis_zum_restore(monkeypatch, docker)
+
+    erg = lp._probe(dict(UMGEBUNG), "kunde")
+
+    assert erg["result"] == "passed", erg.get("error")
+    assert "volume is in use" in erg["cleanup_error"]
+    assert "verify_kunde_" in erg["cleanup_error"]
+
+
+def test_a_clean_cleanup_leaves_no_note(monkeypatch):
+    _probe_bis_zum_restore(monkeypatch, FakeDocker())
+    erg = lp._probe(dict(UMGEBUNG), "kunde")
+    assert erg["result"] == "passed", erg.get("error")
+    assert "cleanup_error" not in erg
+
+
+def test_the_restore_timeout_is_handed_to_docker(monkeypatch):
+    zeiten = {}
+
+    def docker(*args, timeout=1800, check=True):
+        if "restore" in args:
+            zeiten["restore"] = timeout
+        return mock.Mock(returncode=0, stdout="", stderr="")
+
+    _probe_bis_zum_restore(monkeypatch, docker)
+    lp._probe(dict(UMGEBUNG), "kunde")
+    assert zeiten["restore"] == lp.VERIFY_RESTORE_TIMEOUT
+
+    lp._probe(dict(UMGEBUNG, restore_timeout=3 * STUNDE), "kunde")
+    assert zeiten["restore"] == 3 * STUNDE
+
+
+def test_the_restore_timeout_can_be_set_per_area(monkeypatch, tmp_path):
+    """Ein grosser Bereich braucht laenger zum Zurueckspielen als ein kleiner."""
+    gerufen = []
+    monkeypatch.setattr(
+        lp,
+        "_probe",
+        lambda umgebung, stanza: gerufen.append(umgebung) or {},
+    )
+    monkeypatch.setattr(lp.os, "chown", lambda *a, **kw: None)
+    cert = tmp_path / "cert"
+    cert.mkdir()
+    for f in ("ca.crt", "client.crt", "client.key"):
+        (cert / f).write_text("x")
+    bench = dict(
+        BENCH,
+        cert_dir=str(cert),
+        stanzas={"gross": {"restore_timeout": 3 * STUNDE}},
+    )
+
+    lp.run_verify_bench(bench, "kunde-a")
+    lp.run_verify_bench(bench, "gross")
+
+    assert gerufen[0]["restore_timeout"] == lp.VERIFY_RESTORE_TIMEOUT
+    assert gerufen[1]["restore_timeout"] == 3 * STUNDE
+
+
+def _aufraeumen(docker):
+    """Nur das Aufraeumen, ohne die Probe davor."""
+    with mock.patch.object(lp, "_docker", docker):
+        return lp._verify_cleanup("verify-kunde-abc", "verify_kunde_abc")
+
+
+def test_the_containers_found_on_the_volume_are_the_ones_removed():
+    """Nicht nur danach fragen - die gefundenen IDs muessen auch weg.
+
+    Ohne das stuende ein namenloser Hilfscontainer weiter auf dem Volume, und
+    `volume rm` scheiterte wie vor dem Fix.
+    """
+    docker = FakeDocker(antworten={("ps", "-aq"): (0, "c0ffee01\nbeef0002\n", "")})
+    assert _aufraeumen(docker) is None
+    reihenfolge = [a[:2] for a in docker.aufrufe]
+    rm = docker.aufrufe[reihenfolge.index(("rm", "-f"))]
+    assert "c0ffee01" in rm and "beef0002" in rm, rm
+    assert ("volume=verify_kunde_abc",) == tuple(
+        x for x in docker.aufrufe[0] if x.startswith("volume=")
+    )
+    assert reihenfolge.index(("rm", "-f")) < reihenfolge.index(("volume", "rm"))
+
+
+def test_dockers_own_reason_stays_in_the_note():
+    """'volume is in use' allein sagt nicht, WARUM der Container blieb."""
+    docker = FakeDocker(
+        volume_rm_rc=1,
+        antworten={
+            ("rm", "-f"): (
+                1,
+                "",
+                "Error response from daemon: No such container: verify-kunde-abc\n"
+                "Error response from daemon: cannot remove container "
+                "c0ffee01: device or resource busy\n",
+            )
+        },
+    )
+    vermerk = _aufraeumen(docker)
+    assert "device or resource busy" in vermerk
+    assert "volume is in use" in vermerk
+    # Laengst entfernte Namen sind normal und kein Befund.
+    assert "No such container" not in vermerk
+
+
+def test_a_failing_container_search_is_noted():
+    docker = FakeDocker(
+        antworten={("ps", "-aq"): (1, "", "Cannot connect to the Docker daemon")}
+    )
+    assert "Cannot connect to the Docker daemon" in _aufraeumen(docker)
+
+
+def test_a_cleanup_that_blows_up_is_noted_and_keeps_the_result(monkeypatch):
+    docker = FakeDocker(
+        antworten={
+            ("volume", "rm"): lp.subprocess.TimeoutExpired(["docker"], 300)
+        }
+    )
+    _probe_bis_zum_restore(monkeypatch, docker)
+    erg = lp._probe(dict(UMGEBUNG), "kunde")
+    assert erg["result"] == "passed", erg.get("error")
+    assert "TimeoutExpired" in erg["cleanup_error"]
+
+
+@pytest.mark.parametrize("wert", ["7200", -5, 0, True, None, 1.5])
+def test_an_invalid_restore_timeout_is_a_config_error(monkeypatch, tmp_path, wert):
+    """Ein Tippfehler in der Konfiguration ist kein Zeitablauf.
+
+    "7200" als Text knallte erst mitten im Restore als TypeError, ein negativer
+    Wert sah aus wie ein echter Zeitablauf, 0/null fielen still auf den
+    Standard zurueck.
+    """
+    gerufen = []
+    monkeypatch.setattr(lp, "_probe", lambda u, s: gerufen.append(u) or {})
+    monkeypatch.setattr(lp.os, "chown", lambda *a, **kw: None)
+    cert = tmp_path / "cert"
+    cert.mkdir()
+    for f in ("ca.crt", "client.crt", "client.key"):
+        (cert / f).write_text("x")
+    bench = dict(
+        BENCH, cert_dir=str(cert), stanzas={"gross": {"restore_timeout": wert}}
+    )
+    erg = lp.run_verify_bench(bench, "gross")
+    assert gerufen == []
+    assert erg["result"] == "failed"
+    assert "restore_timeout" in erg["error"]
+
+
+VOR_TAGEN = lp.arrow.get(JETZT - 6 * 86400).isoformat()
+
+
+def _volumes(namen, angelegt):
+    return {
+        ("volume", "ls"): (0, "".join(n + "\n" for n in namen), ""),
+        ("volume", "inspect"): (
+            0,
+            "".join(f"{n} {angelegt[n]}\n" for n in namen),
+            "",
+        ),
+    }
+
+
+def test_old_leftovers_on_the_bench_are_reported(monkeypatch):
+    """Ein hart abgebrochener Lauf raeumt nicht auf und vermerkt nichts.
+
+    SIGKILL, OOM, Neustart: dann laeuft kein `finally`. Was liegenbleibt,
+    meldet deshalb jede FOLGENDE Probe - solange, bis es weg ist.
+    """
+    junge = lp.arrow.get(JETZT - 1800).isoformat()  # laeuft parallel
+    docker = FakeDocker(
+        antworten=_volumes(
+            ["verify_powerhouse_cicd_395f35dcd6", "verify_zebroodo_1234567890"],
+            {
+                "verify_powerhouse_cicd_395f35dcd6": VOR_TAGEN,
+                "verify_zebroodo_1234567890": junge,
+            },
+        )
+    )
+    _probe_bis_zum_restore(monkeypatch, docker)
+    erg = lp._probe(dict(UMGEBUNG), "kunde")
+    assert erg["leftovers"] == ["verify_powerhouse_cicd_395f35dcd6"]
+    assert erg["result"] == "passed", erg.get("error")
+
+
+def test_a_clean_bench_reports_no_leftovers(monkeypatch):
+    _probe_bis_zum_restore(monkeypatch, FakeDocker())
+    erg = lp._probe(dict(UMGEBUNG), "kunde")
+    assert "leftovers" not in erg
+
+
+def test_leftovers_are_only_reported_never_deleted(monkeypatch):
+    docker = FakeDocker(
+        antworten=_volumes(
+            ["verify_alt_0000000001"], {"verify_alt_0000000001": VOR_TAGEN}
+        )
+    )
+    _probe_bis_zum_restore(monkeypatch, docker)
+    lp._probe(dict(UMGEBUNG), "kunde")
+    assert not any(
+        "verify_alt_0000000001" in a and a[0] in ("rm", "volume") and "rm" in a
+        for a in docker.aufrufe
+    ), docker.aufrufe
+
+
+def test_the_bench_config_sets_a_generous_protocol_timeout():
+    """Die Gegenstelle darf nicht nach 31 min aufgeben, waehrend gelesen wird.
+
+    So brach die Bestandspruefung von powerhouse_cicd am 11. und 18.10.2026
+    ab: "timeout after 1860000ms waiting for read" auf dem Repo-Host.
+    """
+    text = lp.bench_conf_text(BENCH, "kunde-a")
+    assert f"protocol-timeout={lp.VERIFY_PROTOCOL_TIMEOUT}" in text
+    assert lp.VERIFY_PROTOCOL_TIMEOUT > 1860
+
+
+def test_the_protocol_timeout_can_be_set_per_area(monkeypatch, tmp_path):
+    """Ueber stanzas wie restore_timeout - landet in der pgbackrest.conf."""
+    monkeypatch.setattr(lp.os, "chown", lambda *a, **kw: None)
+    cert = tmp_path / "cert"
+    cert.mkdir()
+    for f in ("ca.crt", "client.crt", "client.key"):
+        (cert / f).write_text("x")
+    confs = []
+
+    def docker(*args, **kw):
+        for i, a in enumerate(args):
+            if a == "-v" and args[i + 1].split(":")[1] == "/etc/pgbackrest":
+                ordner = args[i + 1].split(":")[0]
+                with open(f"{ordner}/pgbackrest.conf") as fh:
+                    confs.append(fh.read())
+        return mock.Mock(stdout="", stderr="", returncode=0)
+
+    monkeypatch.setattr(lp, "_docker", docker)
+    bench = dict(
+        BENCH,
+        cert_dir=str(cert),
+        stanzas={"gross": {"protocol_timeout": 5 * STUNDE}},
+    )
+    lp.run_repo_verify_bench(bench, "kunde-a")
+    lp.run_repo_verify_bench(bench, "gross")
+
+    assert len(confs) == 2
+    assert f"protocol-timeout={lp.VERIFY_PROTOCOL_TIMEOUT}" in confs[0]
+    assert f"protocol-timeout={5 * STUNDE}" in confs[1]
+
+
+@pytest.mark.parametrize("wert", ["7200", 1800, 600, 0, True, None, 1.5])
+def test_an_invalid_protocol_timeout_is_a_config_error(monkeypatch, tmp_path, wert):
+    """pgBackRest verlangt protocol-timeout > db-timeout (1800 s).
+
+    Sonst stiege es erst im Container aus - als Bestand "nicht durchgelaufen",
+    nicht als Fehler in der Konfiguration.
+    """
+    gerufen = []
+    monkeypatch.setattr(lp.os, "chown", lambda *a, **kw: None)
+    monkeypatch.setattr(lp, "_docker", lambda *a, **kw: gerufen.append(a))
+    cert = tmp_path / "cert"
+    cert.mkdir()
+    for f in ("ca.crt", "client.crt", "client.key"):
+        (cert / f).write_text("x")
+    bench = dict(
+        BENCH, cert_dir=str(cert), stanzas={"gross": {"protocol_timeout": wert}}
+    )
+    erg = lp.run_repo_verify_bench(bench, "gross")
+    assert gerufen == []
+    assert erg["result"] == "failed"
+    assert "protocol_timeout" in erg["error"]

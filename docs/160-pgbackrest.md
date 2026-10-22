@@ -514,6 +514,40 @@ the verify bench the limit can be set per area with `max_backup_age` (seconds)
 in `stanzas`, e.g. for an area that only backs up weekly. The proof file
 carries `backup_stop` and `backup_age`.
 
+The restore itself may take one hour by default. A large area needs longer;
+on the bench set `restore_timeout` (seconds) for it in `stanzas`. When the
+time runs out, only the docker client is stopped — the restore container keeps
+running and holds the throwaway volume. `verify` therefore names that container
+and, when cleaning up, removes every container that still has the volume
+mounted before removing the volume. Anything left behind anyway is written to
+the proof file as `cleanup_error` — with docker's own reason, not just "volume
+is in use" — and printed after the result, instead of filling the disk
+unnoticed. The result of the probe itself stays as it was: a leftover volume
+does not make the backup worse.
+
+`restore_timeout` must be whole seconds greater than zero. Anything else
+(`"7200"` as a string, `0`, `null`, `true`) fails the probe for that area with
+"restore_timeout … ungueltig" before anything is restored.
+
+The bench also writes `protocol-timeout` into its pgbackrest.conf, by default
+3 hours. During `repo-verify` the workers read while the connection of the main
+process sits idle; with pgBackRest's own default (1830 s) the repository host
+gives up after about 31 minutes ("timeout after 1860000ms waiting for read",
+seen on the bench as "TLS error … unexpected eof while reading"). Large areas
+need longer than that. Set `protocol_timeout` (seconds) per area in `stanzas`
+if 3 hours is not enough; it must be greater than 1800 (pgBackRest's
+`db-timeout`), otherwise the area fails with "protocol_timeout … ungueltig"
+before pgBackRest starts.
+
+A hard abort — SIGKILL, the OOM killer, a reboot — skips the cleanup and leaves
+no note. So every probe first looks for `verify_*` volumes older than 12 hours
+and lists them as `leftovers` in its proof file (and in yellow after the
+result), for as long as they exist. They are only reported, never deleted:
+which of them may go is decided by a person. Younger ones are left alone,
+because they can belong to the probe running in parallel. On the backup
+machine, `zebroo-backup-metrics` counts proofs with `cleanup_error` or
+`leftovers` for the alarm.
+
 Two traps in `repo-verify`, both learned the hard way:
 
 - **`pgbackrest verify` exits 0 even when it found problems.** The verdict is

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Part of Zebroo GmbH. See LICENSE file for full copyright and licensing details (www.zebroo.de/license).
 """Generate the provisioned Grafana dashboards.
 
 Hand-editing multi-panel Grafana JSON is painful, so the dashboards are
@@ -189,6 +190,35 @@ def rowp(title, y):
     }
 
 
+def nav(y):
+    """Link bar between the entry points.
+
+    A panel instead of dashboard "links": /system opens in kiosk mode, which
+    hides Grafana's top bar and with it the dashboard links. The targets are
+    the proxy's friendly redirects (see dashboard/proxy/dashboard.conf).
+
+    Plain markdown links do not work here: Grafana intercepts clicks on
+    links without a target and routes them inside its app, below root_url
+    /system/ -- /logs became /system/logs (page not found). target="_self"
+    makes the browser load the URL itself, so the proxy redirect applies.
+    """
+    links = (("Overview", "/system"), ("Logs", "/logs"))
+    return {
+        "id": nid(),
+        "type": "text",
+        "title": "",
+        "transparent": True,
+        "gridPos": gp(0, y, 24, 2),
+        "options": {
+            "mode": "markdown",
+            "content": " &nbsp;|&nbsp; ".join(
+                f'<a href="{href}" target="_self">{label}</a>'
+                for label, href in links
+            ),
+        },
+    }
+
+
 def pt(expr, refId="A", ds=PROM, legend=None, instant=False):
     t = {"refId": refId, "datasource": ds, "expr": expr}
     if legend is not None:
@@ -273,6 +303,8 @@ def write(name, dash):
 _id[0] = 0
 panels = []
 y = 0
+panels.append(nav(y))
+y += 2
 panels.append(rowp("System - CPU / RAM / Disk", y))
 y += 1
 panels.append(
@@ -361,6 +393,10 @@ panels.append(
 )
 y += 7
 
+# Response-time queries extract ONLY request_time (and uri where grouped) and
+# aggregate with by (): a bare `| json` turns every access-log field (uri,
+# remote_addr, time, ...) into a label, so each request becomes its own
+# series and Loki aborts at 500 series -> the panels showed "No data".
 panels.append(rowp("Requests & Response times", y))
 y += 1
 panels.append(
@@ -384,17 +420,17 @@ panels.append(
         gp(12, y, 12, 8),
         [
             lt(
-                'quantile_over_time(0.50, {job="nginx"} | json | unwrap request_time [$__interval])',
+                'quantile_over_time(0.50, {job="nginx"} | json request_time | unwrap request_time | __error__="" [$__interval]) by ()',
                 refId="A",
                 legend="p50",
             ),
             lt(
-                'quantile_over_time(0.95, {job="nginx"} | json | unwrap request_time [$__interval])',
+                'quantile_over_time(0.95, {job="nginx"} | json request_time | unwrap request_time | __error__="" [$__interval]) by ()',
                 refId="B",
                 legend="p95",
             ),
             lt(
-                'max_over_time({job="nginx"} | json | unwrap request_time [$__interval])',
+                'max_over_time({job="nginx"} | json request_time | unwrap request_time | __error__="" [$__interval]) by ()',
                 refId="C",
                 legend="max",
             ),
@@ -427,7 +463,7 @@ panels.append(
         gp(8, y, 4, 6),
         [
             lt(
-                'avg_over_time({job="nginx"} | json | unwrap request_time [5m])',
+                'avg_over_time({job="nginx"} | json request_time | unwrap request_time | __error__="" [5m]) by ()',
                 instant=True,
             )
         ],
@@ -451,12 +487,12 @@ panels.append(
 )
 y += 6
 
-# The dashboard's own pages (Grafana under /system, the log explorers under
-# /logs and /logs2) generate constant auto-refresh self-traffic that would
+# The dashboard's own pages (Grafana under /system, the log explorer under
+# /logs) generate constant auto-refresh self-traffic that would
 # otherwise dominate the route stats. A *line* filter on the raw nginx-JSON
 # field is used (a `| uri !~` label filter after `| json` does NOT reliably
 # drop them in Loki); it must sit before `| json`. The prefix match covers
-# /system/api/..., /logs/... and /logs2 too.
+# /system/api/..., /logs/... and the /logs2 redirect too.
 ROUTE_EXCL = '!~ `"uri":"/(system|logs)`'
 panels.append(rowp("Routes (from nginx access log)", y))
 y += 1
@@ -466,7 +502,7 @@ panels.append(
         gp(0, y, 12, 8),
         [
             lt(
-                'topk(10, quantile_over_time(0.95, {job="nginx"} %s | json | unwrap request_time [$__interval]) by (uri))'
+                'topk(10, quantile_over_time(0.95, {job="nginx"} %s | json uri, request_time | unwrap request_time | __error__="" [$__interval]) by (uri))'
                 % ROUTE_EXCL,
                 legend="{{uri}}",
             )
@@ -481,7 +517,7 @@ panels.append(
         gp(12, y, 12, 8),
         [
             lt(
-                'topk(15, quantile_over_time(0.95, {job="nginx"} %s | json | unwrap request_time [$__range]) by (uri))'
+                'topk(15, quantile_over_time(0.95, {job="nginx"} %s | json uri, request_time | unwrap request_time | __error__="" [$__range]) by (uri))'
                 % ROUTE_EXCL,
                 instant=True,
             )
@@ -799,6 +835,8 @@ SEL = (
 _id[0] = 0
 p = []
 y = 0
+p.append(nav(y))
+y += 2
 p.append(
     stat(
         "Errors last 24h",

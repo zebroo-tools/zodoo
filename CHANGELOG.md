@@ -1,5 +1,83 @@
 # Changelog
 
+## 12.9.0
+
+- **Feature**: Roundcube image: base switched from ubuntu:20.04 (PHP 7.4, EOL) to debian:trixie with PHP 8.4, Roundcube 1.6.6 -> 1.6.20 (security fixes). Removed the unused python/pip layer and the dead mcrypt call; download now over verified HTTPS. Rebuild with `odoo build roundcube` and restart the roundcube container.
+
+
+## 12.8.7
+
+- **Fix**: pgbackrest verify/repo-verify auf dem Prüfstand: protocol-timeout 3 h statt 31 min, je Bereich als protocol_timeout einstellbar
+
+
+## 12.8.6
+
+- **Fix**: apt-cacher (squid-deb-proxy) starts again after `docker restart`: a stale pid file no longer makes squid exit with "Squid is already running", which left port 3142 closed and broke every image build using the proxy.
+
+
+## 12.8.5
+
+- **Fix**: Monitoring-Dashboard: die Link-Leiste oben (Overview | Logs) führt wieder zur richtigen Seite statt auf „Page not found“ unter /system/logs. Der Eintrag „Log explorer“ entfällt, er zeigte seit dem Wegfall von /logs2 nur noch auf /logs.
+
+
+## 12.8.4
+
+- **Fix**: Router: ein vHost, der sein erstes Let's-Encrypt-Zertifikat bekommt, landet nicht mehr in einer HTTPS-Weiterleitungsschleife - setup_ssl.py bindet das Zertifikat selbst im Proxy-Block ein, statt certbot den Weiterleitungsblock wählen zu lassen (#294).
+
+
+## 12.8.3
+
+- **Fix**: pgbackrest verify: restore_timeout wird geprüft, Docker-Fehler beim Aufräumen bleiben im Vermerk, liegengebliebene verify_*-Volumes werden als leftovers gemeldet
+
+
+## 12.8.2
+
+- **Internal**: Release workflow: several merges in a row no longer turn the older release runs red. Only the run for the current tip of main releases (and takes all open patchnotes along), release runs no longer overlap.
+- **Fix**: pgbackrest verify: nach einem Restore-Zeitablauf bleiben Container und Wegwerf-Volume nicht mehr liegen; Restore-Zeitlimit je Bereich einstellbar (restore_timeout)
+
+
+## 12.8.1
+
+- **Fix**: PGBR_VERSION zaehlt jetzt zum Image-Tag von postgres und pgbackrest. Bisher stand nur POSTGRES_VERSION in registry_tag.yml, obwohl die Dockerfiles pgbackrest nur bei gesetztem PGBR_VERSION installieren und dann auf diese Version festnageln. Wer pgBackRest in einem Projekt einschaltete, bekam deshalb aus der Registry das alte Image unter unveraendertem Tag zurueck - ein postgres ohne pgbackrest. Sichtbar wurde das erst viel spaeter im postgres-Log als "archive_command failed with exit code 127" bzw. "pgbackrest: command not found"; der Notbehelf war "odoo build postgres --no-zodoo-pull". Pruefen: in einem Projekt PGBR_VERSION aendern, "odoo reload" und "odoo build postgres pgbackrest" - beide Images werden jetzt unter einem neuen Tag gebaut statt aus der Registry gezogen, und "odoo pgbackrest verify" meldet dieselbe Version fuer Sidecar und postgres.
+
+
+## 12.8.0
+
+- **Feature**: Proxy records the last real (human) request in proxy_exchange/last_activity; new command `odoo last-activity [--json]` reads it. Monitoring, health checks and the open-tab bus are not counted.
+- **Fix**: Backup bricht nicht mehr an der Postgres-Warnung „collation version mismatch“ ab. Nach dem Wechsel der postgres-Abbilder auf bookworm (glibc 2.31 → 2.36) gab es auf neu gebauten Hosts keinen nächtlichen Dump mehr, obwohl pg_dump fehlerfrei durchlief. Die Warnung steht jetzt laut im Backup-Log, Reindex + REFRESH COLLATION VERSION bleiben nötig.
+- **Fix**: Router: certbot vhosts keep their HTTP-to-HTTPS redirect across re-renders
+- **Fix**: `odoo status` (läuft auch am Ende von `odoo update` und `odoo up -d`) zeigt Dashboard-Passwort und DEFAULT_DEV_PASSWORD nur noch maskiert. Mit `odoo status --show-secrets` kommen sie wie bisher.
+
+
+## 12.7.5
+
+- **Fix**: cadvisor auf v0.55.1: mit dem containerd-Image-Store von Docker 29 konnte v0.52.1 die Container nicht anlegen, CPU-/RAM-Panels blieben leer
+- **Fix**: MANIFEST uninstall: modules without source no longer crash odoo update; they are only uninstalled after confirmation (#279)
+
+
+## 12.7.4
+
+- **Fix**: Router: der Platzhalter-vHost faengt unbekannte Domains ab (404), statt sie an den alphabetisch ersten vHost zu geben
+- **Fix**: cadvisor auf v0.52.1 (Docker 29 lehnt API 1.41 ab, CPU-/RAM-Panels waren leer); Link-Leiste Overview/Logs/Log-Explorer oben in beiden Dashboards; erzeugte Gate-Passwoerter (Dashboard/Logs/Coding) werden in die Projekt-Settings geschrieben und aendern sich beim reload nicht mehr
+- **Fix**: Odoo loggt auf echten Instanzen standardmäßig nur noch ab warn (bisher faktisch debug), bei DEVMODE=1 info. Ein gesetztes ODOO_LOG_LEVEL gilt weiter; warning wird zu warn. Außerdem: /logs2 entfällt und leitet auf /logs um (Explore war seit Grafana 11 für Viewer gesperrt).
+- **Fix**: Router: server_names/variables hash sizes raised so nginx no longer warns on every reload with a few hundred vHosts
+
+
+## 12.7.3
+
+- **Fix**: Router: certbot und Plugins auf feste Versionen (certbot 5.8.0, dns-ionos 2024.11.9), renew-all.sh ohne --nginx, damit DNS-01-Zertifikate nicht auf HTTP-01 zurückfallen
+
+
+## 12.7.2
+
+- **Fix**: Installer, CLI und Projektvorlagen verwenden zebroo-tools; Robot-Setup erkennt bestehende alte und neue Einbindungen ohne Duplikate.
+
+
+## 12.7.1
+
+- **Fix**: Settings files written as root (`sudo -E odoo ...`) keep their owner instead of ending up as root:root 0600 in the instance user's ~/.odoo - the cicd could no longer overwrite them (dump restore failed with scp Permission denied).
+
+
 ## 12.7.0
 
 - **Feature**: DEVMODE: Die auf den lokalen Mailcatcher umgebogenen Mailserver (ausgehend und eingehend) heißen jetzt „Test-Mailserver (<alter Name>)“, damit auf einer Testkopie niemand mehr annimmt, der echte Mailserver sei aktiv. Übersetzbare Namen (jsonb) werden in jeder Sprache angepasst, ein erneutes turn-into-dev hängt das Präfix nicht doppelt an. Außerdem wird der SMTP-Server ab Odoo 13 jetzt auch dann umgebogen, wenn fetchmail nicht installiert ist. Prüfen: Prod-Dump mit DEVMODE=1 restoren oder `odoo dev-env turn-into-dev` ausführen, dann unter Einstellungen → Technisch → Ausgehende Mailserver bzw. Eingehende Mailserver nachsehen.

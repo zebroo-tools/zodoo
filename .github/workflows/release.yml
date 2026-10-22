@@ -71,6 +71,11 @@ jobs:
   release:
     needs: [test, bake]
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || 'zebroo-tools' }}
+    # One release at a time. No cancel-in-progress: the release commit itself
+    # triggers a new run, which would otherwise cancel this one between the
+    # push and `gh release create`.
+    concurrency:
+      group: release
     steps:
       - name: Isolate job home and tools
         shell: bash
@@ -97,6 +102,16 @@ jobs:
       - name: Check for patchnotes
         id: check
         run: |
+          # Several merges in a row start one run each, and each run checks out
+          # its own merge commit. Only the run for the current tip of main can
+          # push; the older ones were rejected and turned red. The newest run
+          # collects all open patchnotes, so the older ones just step aside.
+          git fetch --quiet origin main
+          if [ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "main has moved on past $GITHUB_SHA, the run for the newer commit releases."
+            exit 0
+          fi
           NOTES=$(find .patchnotes -name '*.yml' -not -name '*.template' 2>/dev/null | head -1)
           if [ -z "$NOTES" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"

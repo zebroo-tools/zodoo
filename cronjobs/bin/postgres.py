@@ -22,6 +22,45 @@ logging.getLogger().setLevel(logging.DEBUG)
 logger = logging.getLogger("")  # root handler
 
 
+def split_known_warnings(stderr_text):
+    """Return the part of pg_dump's stderr that must fail the backup.
+
+    Any stderr output is treated as fatal, with one exception: the collation
+    version mismatch warning. Postgres prints it on every connection after the
+    image's glibc changed (bullseye 2.31 -> bookworm 2.36 since zodoo v11.2.1),
+    and pg_dump still exits 0 with a complete dump. Failing on it meant no
+    nightly dump at all. The warning is logged loudly instead, because the
+    indexes still need a REINDEX and REFRESH COLLATION VERSION.
+    """
+    lines = stderr_text.strip().splitlines()
+    fatal = []
+    known = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if (
+            line.startswith("WARNING:")
+            and "collation version mismatch" in line
+        ):
+            block = [line]
+            while i + 1 < len(lines) and lines[i + 1].startswith(
+                ("DETAIL:", "HINT:")
+            ):
+                i += 1
+                block.append(lines[i])
+            known.append("\n".join(block))
+        else:
+            fatal.append(line)
+        i += 1
+    for block in dict.fromkeys(known):
+        logger.warning(
+            "Backup continues despite collation version mismatch - run REINDEX "
+            "and ALTER DATABASE ... REFRESH COLLATION VERSION:\n%s",
+            block,
+        )
+    return "\n".join(fatal).strip()
+
+
 class DBSizeOutputter(Thread):
     def __init__(self, host, dbname, port, user, password):
         Thread.__init__(self)
@@ -207,8 +246,10 @@ def backup(
         # run under bash to guarantee pipefail is honored across distros.
         rc = subprocess.call(["bash", "-o", "pipefail", "-c", cmd])
         for file in [err_dump, err_pigz]:
-            if file.exists() and file.read_text().strip():
-                raise Exception(file.read_text().strip())
+            if file.exists():
+                fatal = split_known_warnings(file.read_text())
+                if fatal:
+                    raise Exception(fatal)
         if rc != 0:
             raise Exception(
                 f"pg_dump pipeline failed with exit code {rc}. "

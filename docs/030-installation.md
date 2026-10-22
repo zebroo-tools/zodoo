@@ -47,7 +47,7 @@ pull it from Docker Hub — which surfaces as a misleading
 One-liner installer (installs zodoo CLI + clones zodoo images to `~/.odoo/images`):
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/Odoo-Ninjas/zodoo/refs/heads/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/zebroo-tools/zodoo/refs/heads/main/install.sh)
 ```
 
 This installs the `odoo` command via `pipx` and sets up `~/.odoo/images/`.
@@ -92,7 +92,7 @@ If you had a previous installation (e.g. old "wodoo"):
 
 ```bash
 rm -Rf ~/.odoo/images
-bash <(curl -fsSL https://raw.githubusercontent.com/Odoo-Ninjas/zodoo/refs/heads/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/zebroo-tools/zodoo/refs/heads/main/install.sh)
 ```
 
 ## Why the base images are pinned to old distributions

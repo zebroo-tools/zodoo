@@ -12,6 +12,7 @@ COPY conf.d/ /usr/local/openresty/nginx/conf.d/
 COPY lua/myngx.lua /usr/local/openresty/luajit/share/lua/5.1/myngx.lua
 COPY lua/basicauth.lua /usr/local/openresty/luajit/share/lua/5.1/basicauth.lua
 COPY lua/dashauth.lua /usr/local/openresty/luajit/share/lua/5.1/dashauth.lua
+COPY lua/activity.lua /usr/local/openresty/luajit/share/lua/5.1/activity.lua
 COPY bin/ /usr/local/bin/
 COPY construction_site/ /opt/construction_site/
 RUN chmod a+x /usr/local/bin/* && \

@@ -47,7 +47,7 @@ When editing it:
 - python3.13 not supported yet
 
 ```
-bash <(curl -fsSL https://raw.githubusercontent.com/Odoo-Ninjas/zodoo/refs/heads/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/zebroo-tools/zodoo/refs/heads/main/install.sh)
 ```
 
 ### optional: To be not blocked when working on btrfs/zfs volumes and so, this is suggested on dev machines:

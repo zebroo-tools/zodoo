@@ -1220,8 +1220,24 @@ def update(
                 verbose=True,
             )
         manifest_mode = manifest
+        all_modules = (
+            not param_module
+            or len(param_module) == 1
+            and param_module[0] in ["all", "base", False, None, ""]
+        )
         if is_docker_available() and not dry_run:
             start_postgres_if_local(ctx, config)
+        # Ask about modules without source before anything is stopped or
+        # updated, so a refusal leaves the instance as it was.
+        approved_without_source = []
+        if uninstall or all_modules:
+            to_uninstall = list(MANIFEST().get("uninstall", []))
+            if config.devmode:
+                to_uninstall += MANIFEST().get("devmode_uninstall", [])
+            approved_without_source = _confirm_uninstall_without_source(
+                to_uninstall, MANIFEST(), non_interactive, dry_run=dry_run
+            )
+        if is_docker_available() and not dry_run:
             # Always stop web/queuejobs/cronjobs before updating: live
             # workers holding row locks (queue_job / cron) make DDL
             # migrations (ALTER TABLE …) hit lock_timeout. The previous
@@ -1294,17 +1310,17 @@ def update(
                 param_module,
             )
 
-        _uninstall_devmode_modules(ctx, config, manifest, dry_run=dry_run)
-
-        all_modules = (
-            not param_module
-            or len(param_module) == 1
-            and param_module[0] in ["all", "base", False, None, ""]
+        _uninstall_devmode_modules(
+            ctx, config, manifest, dry_run, approved_without_source
         )
 
         if uninstall or all_modules:
             _uninstall_marked_modules(
-                ctx, config, manifest.get("uninstall", []), no_restart
+                ctx,
+                config,
+                manifest.get("uninstall", []),
+                no_restart,
+                approved_without_source=approved_without_source,
             )
 
         # check danglings
@@ -1386,14 +1402,20 @@ def _exec_commands(ctx, config, commands):
         subprocess.run(cmd, check=True, env=env)
 
 
-def _uninstall_devmode_modules(ctx, config, manifest, dry_run):
+def _uninstall_devmode_modules(
+    ctx, config, manifest, dry_run, approved_without_source=None
+):
     if config.devmode and manifest.get("devmode_uninstall", []):
         for mod in manifest["devmode_uninstall"]:
             if dry_run:
                 click.secho(f"Would uninstall: {mod}")
                 continue
             _uninstall_marked_modules(
-                ctx, config, manifest["devmode_uninstall"], False
+                ctx,
+                config,
+                manifest["devmode_uninstall"],
+                False,
+                approved_without_source=approved_without_source,
             )
 
 
@@ -1548,7 +1570,110 @@ def uninstall(ctx, config, modules, no_restart):
     _uninstall_marked_modules(ctx, config, modules, no_restart=no_restart)
 
 
-def _check_uninstall_descendants(modules, manifest_modules):
+def _has_source(module):
+    from .module_tools import Module
+    from .module_tools import NotInAddonsPath
+
+    try:
+        Module.get_by_name(module)
+    except (NotInAddonsPath, KeyError):
+        return False
+    return True
+
+
+def _confirm_uninstall_without_source(
+    modules, manifest, non_interactive, dry_run=False
+):
+    """Return the installed modules from ``modules`` that have no source and
+    may be uninstalled anyway; abort if any of them is not approved.
+
+    Uninstalling drops the module's tables, so a module whose code is only
+    missing by accident (forgotten addons path, broken gimera checkout, wrong
+    branch) must never be removed silently. Approval is either the MANIFEST
+    key ``uninstall_without_source`` or typing the module name at the prompt.
+    """
+    from .module_tools import DBModules
+
+    sourceless = [
+        x
+        for x in modules
+        if DBModules.is_module_installed(x) and not _has_source(x)
+    ]
+    if not sourceless:
+        return []
+
+    approved_in_manifest = set(manifest.get("uninstall_without_source", []))
+    approved, refused = [], []
+    for module in sourceless:
+        models, field_count = DBModules.get_data_footprint(module)
+        click.secho(
+            f"\nModule '{module}' is marked for uninstall, but its source "
+            "code is not in any addons path.",
+            fg="red",
+            bold=True,
+        )
+        click.secho("Uninstalling it drops this data irrevocably:", fg="red")
+        for model in models:
+            click.secho(
+                f"  - model {model} (table {model.replace('.', '_')})",
+                fg="red",
+            )
+        if not models:
+            click.secho("  - no own models", fg="red")
+        click.secho(
+            f"  - {field_count} field(s) defined by this module", fg="red"
+        )
+        blocking = [
+            x
+            for x in DBModules.get_installed_dependents(module)
+            if x not in modules
+        ]
+        if blocking:
+            refused.append(module)
+            click.secho(
+                "Still required by installed modules that stay installed: "
+                f"{', '.join(blocking)}",
+                fg="red",
+            )
+            continue
+        if dry_run:
+            click.secho(f"Would ask before uninstalling {module}")
+            continue
+        if module in approved_in_manifest:
+            click.secho(
+                "Approved by MANIFEST 'uninstall_without_source'.",
+                fg="yellow",
+            )
+            approved.append(module)
+            continue
+        if non_interactive or not sys.stdin.isatty():
+            refused.append(module)
+            continue
+        answer = click.prompt(
+            f"If the code is only missing by mistake, abort now. "
+            f"Type '{module}' to uninstall it anyway",
+            default="",
+            show_default=False,
+        )
+        if answer.strip() == module:
+            approved.append(module)
+        else:
+            refused.append(module)
+
+    if refused:
+        abort(
+            "Not uninstalling module(s) without source: "
+            f"{', '.join(refused)}\n"
+            "Check the addons paths / gimera checkout first. To uninstall "
+            "them anyway, confirm at the prompt or list them in the MANIFEST "
+            "under 'uninstall_without_source'."
+        )
+    return approved
+
+
+def _check_uninstall_descendants(
+    modules, manifest_modules, approved_without_source=()
+):
     from .module_tools import Module
     from .module_tools import NotInAddonsPath
 
@@ -1566,8 +1691,11 @@ def _check_uninstall_descendants(modules, manifest_modules):
                             f"{objmod.name} has {desc.name} as descendant "
                             "which is still in the install section"
                         )
-        except NotInAddonsPath:
-            pass
+        except (NotInAddonsPath, KeyError):
+            # Without source the dependency check already ran against the
+            # database in _confirm_uninstall_without_source.
+            if module in approved_without_source:
+                effective_uninstall.append(module)
         else:
             effective_uninstall.append(module)
     if errors:
@@ -1651,12 +1779,24 @@ def _run_uninstall_with_recovery(config, cmd, customs_dir):
             break
 
 
-def _uninstall_marked_modules(ctx, config, modules, no_restart=False):
+def _uninstall_marked_modules(
+    ctx,
+    config,
+    modules,
+    no_restart=False,
+    approved_without_source=None,
+    non_interactive=False,
+):
     """
     Checks for file "uninstall" in customs root and sets modules to uninstalled.
+
+    approved_without_source: result of _confirm_uninstall_without_source when
+    the caller already asked (odoo update asks before stopping services);
+    None means ask here.
     """
     from .module_tools import DBModules
     from .odoo_config import customs_dir
+    from .odoo_config import MANIFEST
     from .tools import _is_in_container
 
     assert not isinstance(modules, str)
@@ -1671,12 +1811,14 @@ def _uninstall_marked_modules(ctx, config, modules, no_restart=False):
         return
     click.secho(f"Going to uninstall {','.join(modules)}", fg="red")
 
-    if config.use_docker:
-        pass
+    if approved_without_source is None:
+        approved_without_source = _confirm_uninstall_without_source(
+            modules, MANIFEST(), non_interactive
+        )
     manifest_modules = get_all_modules_installed_by_manifest(config)
 
     effective_uninstall = _check_uninstall_descendants(
-        modules, manifest_modules
+        modules, manifest_modules, approved_without_source
     )
     cmd = ""
     if effective_uninstall:

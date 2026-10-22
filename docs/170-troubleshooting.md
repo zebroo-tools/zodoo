@@ -31,7 +31,7 @@ odoo up -d
 
 ```bash
 rm -Rf ~/.odoo/images
-bash <(curl -fsSL https://raw.githubusercontent.com/Odoo-Ninjas/zodoo/refs/heads/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/zebroo-tools/zodoo/refs/heads/main/install.sh)
 ```
 
 ### `odoo` command not found after installation

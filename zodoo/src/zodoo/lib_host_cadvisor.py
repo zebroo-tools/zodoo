@@ -47,7 +47,15 @@ CONTAINER = "zodoo_cadvisor"
 NETZ = "zodoo_monitoring"
 LABEL = "zodoo.cadvisor.spec"
 
-ABBILD = "gcr.io/cadvisor/cadvisor:v0.49.1"
+# v0.49.1 spricht fest Docker-API 1.41; Docker 29 verlangt mindestens 1.44.
+# Dann scheitert die Docker-Factory still, cadvisor meldet nur noch "/" und die
+# CPU-/RAM-Panels pro Container bleiben leer. Ab v0.52 handelt der Client die
+# API-Version aus.
+# Mit dem containerd-Image-Store von Docker 29 (Treiber "overlayfs" statt
+# overlay2/zfs) findet v0.52 die Container zwar, kann sie aber nicht anlegen
+# ("failed to identify the read-write layer ID") -- gleiches Bild, leere
+# Panels. v0.54 kann den Store; getestet mit v0.55.1 auf overlayfs und zfs.
+ABBILD = "gcr.io/cadvisor/cadvisor:v0.55.1"
 
 # Dieselben Argumente wie zuvor im Stapel der Instanz, siehe
 # dashboard/docker-compose.yml und CHANGELOG zu v11.4.x:

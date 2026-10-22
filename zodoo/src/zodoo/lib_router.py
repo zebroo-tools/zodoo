@@ -431,9 +431,40 @@ def _nginx_test(install_dir):
     return False
 
 
+#: Rendered alongside the configured vhosts, never read from vhosts.yml.
+#: "00_" only puts it first in a directory listing - what makes it the
+#: catch-all is the default_server directive in the template itself.
+_DEFAULT_SERVER_VHOST = {
+    "template": "default_server",
+    "filename": "00_default",
+    # The block itself listens on "server_name _"; this name only reaches
+    # openssl, as CN and SAN of the self-signed certificate. ".invalid" is
+    # reserved for exactly that (RFC 2606) and can never collide with a real
+    # domain - a bare "_" would be fed to "subjectAltName=DNS:_".
+    "server_name": "default.invalid",
+    "certificate_name": "_default",
+    "ssl_self_signed": True,
+}
+
+
+def _with_default_server(vhosts):
+    """Append the catch-all vhost unless the router already defines one.
+
+    Without it the first server block nginx happens to parse becomes the
+    default for every unmatched name, and the blocks are included by filename
+    - so deploying a vhost that sorts first quietly hands it all stray
+    traffic. A hand-written entry in vhosts.yml wins, so a router that needs
+    a different catch-all keeps it.
+    """
+    if any(v.get("template") == "default_server" for v in vhosts):
+        return vhosts
+    return list(vhosts) + [dict(_DEFAULT_SERVER_VHOST)]
+
+
 def _render_and_sync_vhosts(config, install_dir, vhosts):
     if not vhosts:
         return False  # nothing to render
+    vhosts = _with_default_server(vhosts)
     src_root = _router_files_dir(config)
     _generate_self_signed_certs(install_dir, vhosts)
     incoming = install_dir / "sites-incoming"

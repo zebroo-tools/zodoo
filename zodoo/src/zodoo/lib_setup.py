@@ -160,12 +160,23 @@ def regenerate_assets(ctx, config):
 
 
 @setup.command()
+@click.option(
+    "--show-secrets",
+    is_flag=True,
+    help="Print passwords (dashboard, DEFAULT_DEV_PASSWORD) instead of masking them.",
+)
 @pass_config
-def status(config):
-    _status(config)
+def status(config, show_secrets):
+    _status(config, show_secrets=show_secrets)
 
 
-def _status(config):
+# Printed by `odoo status`, which also runs at the end of `odoo update` and
+# `odoo up -d` - so their output lands in CI logs, terminals and chat transcripts.
+SECRET_STATUS_KEYS = {"DEFAULT_DEV_PASSWORD"}
+MASK = "****** (odoo status --show-secrets)"
+
+
+def _status(config, show_secrets=False):
     color = "yellow"
     EXTERNAL_DOMAIN = config.EXTERNAL_DOMAIN
     if not EXTERNAL_DOMAIN:
@@ -207,7 +218,9 @@ def _status(config):
             password = config.DASHBOARD_PASSWORD
             if password:
                 click.secho("monitoring password: ", nl=False)
-                click.secho(password, fg=color, bold=True)
+                click.secho(
+                    password if show_secrets else MASK, fg=color, bold=True
+                )
 
     for key in [
         "DEFAULT_DEV_PASSWORD",
@@ -215,8 +228,11 @@ def _status(config):
         "ODOO_QUEUEJOBS_CHANNELS",
         "RUN_ODOO_CRONJOBS",
     ]:
+        value = getattr(config, key)
+        if key in SECRET_STATUS_KEYS and value and not show_secrets:
+            value = MASK
         click.secho(f"{key}:", nl=False, fg=color)
-        click.secho(getattr(config, key))
+        click.secho(value)
 
     msg_file = config.files["project_msg"]
     if msg_file.exists():

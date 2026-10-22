@@ -1,12 +1,4 @@
 {% set _ssl_on = (item.ssl_key_is_on_destination is defined and item.ssl_key_is_on_destination) or (item.ssl_server_cert is defined and item.ssl_server_cert) or (item.ssl_self_signed is defined and item.ssl_self_signed) %}
-{% if _ssl_on %}
-# Redirect plain HTTP to HTTPS for {{ item.server_name }}.
-server {
-    listen 80;
-    server_name  {{ item.server_name }};
-    return 301 https://$host$request_uri;
-}
-{% endif %}
 upstream {{ item.upstream_name }} {
     server {{ item.upstream_server }}:{{ item.upstream_port }};
 }
@@ -25,6 +17,7 @@ limit_req_zone $binary_remote_addr zone={{ item.upstream_name }}_rl:10m rate={{ 
 # BEFORE_SERVER_CONF
 {% endif %}
 
+{% include "_http_redirect.inc" %}
 
 server {
         server_name  {{ item.server_name }};

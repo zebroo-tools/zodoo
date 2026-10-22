@@ -1,8 +1,9 @@
 #!/bin/bash
+# Part of Zebroo GmbH. See LICENSE file for full copyright and licensing details (www.zebroo.de/license).
 
 set -e
 
-REPO_URL="https://github.com/Odoo-Ninjas/zodoo"
+REPO_URL="https://github.com/zebroo-tools/zodoo"
 TARGET_DIR="$HOME/.odoo/images"
 SRC_DIR="$TARGET_DIR/zodoo/src"
 OS="$(uname -s)"

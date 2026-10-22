@@ -2,7 +2,7 @@
 
 zodoo (formerly wodoo) is an **Odoo Docker Framework** that wraps Docker Compose and the Odoo server into a simple, settings-driven CLI tool called `odoo`.
 
-Source: https://github.com/Odoo-Ninjas/zodoo
+Source: https://github.com/zebroo-tools/zodoo
 
 ## What zodoo does
 
@@ -26,7 +26,7 @@ Source: https://github.com/Odoo-Ninjas/zodoo
 - Managing multiple Odoo projects on one machine, each with its own version,
   port and Postgres database.
 
-If your goal is just to *call* an Odoo API from a script, you don't need
+If your goal is just to _call_ an Odoo API from a script, you don't need
 zodoo — use Odoo's XML-RPC/JSON-RPC directly or a thin client library.
 zodoo's value is running and managing the Odoo instance itself.
 

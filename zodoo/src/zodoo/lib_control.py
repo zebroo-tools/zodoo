@@ -92,6 +92,36 @@ def ps(config):
 
 
 @docker.command(
+    name="last-activity",
+    help="Time of the last real (human) request through the proxy. "
+    "Monitoring, health checks and the open-tab bus are not counted. "
+    "Prints 'none' if nothing was recorded yet.",
+)
+@click.option(
+    "--json", "as_json", is_flag=True, help="Machine-readable output."
+)
+@pass_config
+def last_activity(config, as_json):
+    import json
+
+    from .lib_activity import read_last_activity
+
+    ensure_project_name(config)
+    try:
+        info = read_last_activity(config.dirs["run"])
+    except ValueError as ex:
+        abort(str(ex))
+    if as_json:
+        click.echo(json.dumps({"last_activity": info}))
+    elif info is None:
+        click.echo("none")
+    else:
+        click.echo(
+            f"{info['time']} ({info['age_seconds'] // 86400} days ago, {info['host']}{info['uri']})"
+        )
+
+
+@docker.command(
     name="exec", help="Execute a command inside a running container."
 )
 @click.argument(
@@ -491,7 +521,9 @@ def _start_build_accelerators(config):
 
     aufgaben = {"apt cache": start_squid_proxy, "pypi cache": start_proxpi}
     with ThreadPoolExecutor(max_workers=len(aufgaben)) as pool:
-        laeuft = {name: pool.submit(fn, config) for name, fn in aufgaben.items()}
+        laeuft = {
+            name: pool.submit(fn, config) for name, fn in aufgaben.items()
+        }
 
     for name, future in laeuft.items():
         fehler = future.exception()
@@ -501,7 +533,6 @@ def _start_build_accelerators(config):
                 "Continuing without it - the build only gets slower.",
                 fg="yellow",
             )
-
 
 
 @docker.command()

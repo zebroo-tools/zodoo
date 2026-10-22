@@ -13,7 +13,11 @@ RUN apt-get update && apt-get install -y nginx nginx-extras autossh net-tools ip
 # Platzhalter-Schluessel mit 1024 Bit an, und den lehnt die neue
 # cryptography-Bibliothek ab. Das Zertifikat war dann zwar geholt, aber nicht
 # eingebaut -- der vhost blieb ohne TLS.
-RUN pip install --quiet certbot certbot-nginx certbot-dns-rfc2136 certbot-dns-ionos
+#
+# Feste Versionen: jeder Router-Build bekommt denselben certbot, den wir
+# vorher getestet haben. Erhoehen nur gemeinsam (certbot/nginx/rfc2136
+# verlangen gleiche Versionen).
+RUN pip install --quiet certbot==5.8.0 certbot-nginx==5.8.0 certbot-dns-rfc2136==5.8.0 certbot-dns-ionos==2024.11.9
 
 ADD run.sh /run.sh
 ADD bin/ /usr/local/bin/
