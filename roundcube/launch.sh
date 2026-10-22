@@ -10,9 +10,8 @@ mkdir -p /rc/logs
 mkdir -p /rc/tmp
 chown -R www-data:www-data /rc
 
-phpenmod mcrypt
 service nginx start
-service php7.4-fpm start
+service php8.4-fpm start
 
 if [[ "$MAIL_AUTOLOGIN" != "1" ]]; then
 	rm /usr/share/nginx/www/plugins/autologon/autologon.php || true
