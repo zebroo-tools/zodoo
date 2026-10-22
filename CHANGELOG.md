@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.9.1
+
+- **Internal**: Bake test: heavy steps (init, reload, build, db reset, bake) now stream their output live into the CI log and abort after 20 minutes without any output, showing the last lines. Before, a hanging build sat out the full hour and its captured output was lost on timeout.
+
+
 ## 12.9.0
 
 - **Feature**: Roundcube image: base switched from ubuntu:20.04 (PHP 7.4, EOL) to debian:trixie with PHP 8.4, Roundcube 1.6.6 -> 1.6.20 (security fixes). Removed the unused python/pip layer and the dead mcrypt call; download now over verified HTTPS. Rebuild with `odoo build roundcube` and restart the roundcube container.
