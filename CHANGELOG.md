@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.9.0
+
+- **Feature**: Roundcube image: base switched from ubuntu:20.04 (PHP 7.4, EOL) to debian:trixie with PHP 8.4, Roundcube 1.6.6 -> 1.6.20 (security fixes). Removed the unused python/pip layer and the dead mcrypt call; download now over verified HTTPS. Rebuild with `odoo build roundcube` and restart the roundcube container.
+
+
 ## 12.8.7
 
 - **Fix**: pgbackrest verify/repo-verify auf dem Prüfstand: protocol-timeout 3 h statt 31 min, je Bereich als protocol_timeout einstellbar
