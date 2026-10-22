@@ -1,0 +1,3 @@
+type: internal
+description: "Bake test: heavy steps (init, reload, build, db reset, bake) now stream their output live into the CI log and abort after 20 minutes without any output, showing the last lines. Before, a hanging build sat out the full hour and its captured output was lost on timeout."
+breaking: false
