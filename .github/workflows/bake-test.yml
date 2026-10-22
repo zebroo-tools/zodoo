@@ -1,3 +1,4 @@
+# Part of Zebroo GmbH. See LICENSE file for full copyright and licensing details (www.zebroo.de/license).
 name: Bake test
 
 # End-to-end smoke test for the `odoo` CLI: init -> reload -> db reset -> bake,
@@ -43,11 +44,31 @@ on:
 
 jobs:
   bake:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || 'zebroo-tools' }}
     timeout-minutes: 120
     env:
       ZODOO_BAKE_TEST_VERSIONS: ${{ inputs.versions || github.event.inputs.versions || '19.0' }}
     steps:
+      - name: Isolate job home and tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$RUNNER_ENVIRONMENT" == "self-hosted" ]]; then
+            if [[ "${ZEBROO_DOCKER_ISOLATED:-}" != "1" || -z "${DOCKER_HOST:-}" ]]; then
+              echo "::error::An isolated Docker service must be configured for this runner."
+              exit 1
+            fi
+          fi
+          job_home=$(mktemp -d "$RUNNER_TEMP/tools-home.XXXXXX")
+          mkdir -p "$job_home/.local/bin" "$job_home/pipx" "$job_home/tmp" "$job_home/.docker"
+          {
+            echo "HOME=$job_home"
+            echo "PIPX_HOME=$job_home/pipx"
+            echo "PIPX_BIN_DIR=$job_home/.local/bin"
+            echo "TMPDIR=$job_home/tmp"
+            echo "DOCKER_CONFIG=$job_home/.docker"
+          } >> "$GITHUB_ENV"
+          echo "$job_home/.local/bin" >> "$GITHUB_PATH"
       - uses: actions/checkout@v4
 
       - name: Set up Python
@@ -96,7 +117,7 @@ jobs:
         # different interpreter and fail with ModuleNotFoundError.
         # cd /tmp: newer pipx treats `zodoo` as a path when a ./zodoo/
         # directory exists in cwd, breaking the inject.
-        working-directory: /tmp
+        working-directory: ${{ runner.temp }}
         run: |
           pipx inject zodoo pytest pytest-cov
 
@@ -137,19 +158,19 @@ jobs:
       - name: Collect docker logs on failure
         if: failure()
         run: |
-          mkdir -p /tmp/bake-logs
-          docker ps -a > /tmp/bake-logs/docker-ps.txt 2>&1 || true
-          docker images > /tmp/bake-logs/docker-images.txt 2>&1 || true
+          mkdir -p ${{ runner.temp }}/bake-logs
+          docker ps -a > ${{ runner.temp }}/bake-logs/docker-ps.txt 2>&1 || true
+          docker images > ${{ runner.temp }}/bake-logs/docker-images.txt 2>&1 || true
           for c in $(docker ps -aq); do
-            docker logs "$c" > "/tmp/bake-logs/container-${c}.log" 2>&1 || true
+            docker logs "$c" > "${{ runner.temp }}/bake-logs/container-${c}.log" 2>&1 || true
           done
           ls -la "$HOME/.odoo/log" 2>/dev/null || true
-          cp -r "$HOME/.odoo/log" /tmp/bake-logs/odoo-log 2>/dev/null || true
+          cp -r "$HOME/.odoo/log" ${{ runner.temp }}/bake-logs/odoo-log 2>/dev/null || true
 
       - name: Upload diagnostic logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: bake-test-logs
-          path: /tmp/bake-logs
+          path: ${{ runner.temp }}/bake-logs
           if-no-files-found: ignore
