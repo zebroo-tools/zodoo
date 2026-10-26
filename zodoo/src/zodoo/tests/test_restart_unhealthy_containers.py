@@ -3,7 +3,7 @@
 The script is exercised end-to-end with a stubbed ``docker`` binary on
 PATH — no Docker daemon needed, so these run with the fast unit tests.
 The stub serves container state from a whitespace-separated table and
-records ``docker restart`` calls to a log file.
+records ``docker restart`` / ``docker start`` calls to log files.
 
 Table line format:
   name status health restart_count started_at exit_code oom_killed finished_at
@@ -50,9 +50,20 @@ case "$1" in
     ;;
   restart)
     if [ -n "$TEST_FAIL_RESTART" ] && [ "$2" = "$TEST_FAIL_RESTART" ]; then
+      # like the real failure mode: the kill went through, the start did not
+      if [ -n "$TEST_RESTART_LEAVES_EXITED" ]; then
+        awk -v n="$2" '$1==n {$2="exited"; $6="137"} {print}' "$TEST_CONTAINERS" \
+          > "$TEST_CONTAINERS.tmp" && mv "$TEST_CONTAINERS.tmp" "$TEST_CONTAINERS"
+      fi
       exit 1
     fi
     echo "$2" >> "$TEST_RESTART_LOG"
+    ;;
+  start)
+    if [ -n "$TEST_FAIL_START" ] && [ "$2" = "$TEST_FAIL_START" ]; then
+      exit 1
+    fi
+    echo "$2" >> "$TEST_START_LOG"
     ;;
 esac
 """
@@ -73,12 +84,14 @@ class Harness:
         self.state = tmp_path / "state"
         self.containers = tmp_path / "containers.txt"
         self.restart_log = tmp_path / "restarts.log"
+        self.start_log = tmp_path / "starts.log"
         self.ps_args_log = tmp_path / "ps_args.log"
 
     def run(self, table, fail_restart=None, env=None):
         self.containers.write_text("\n".join(table) + "\n" if table else "")
         # fresh per run — assertions must reflect the last tick only
         self.restart_log.unlink(missing_ok=True)
+        self.start_log.unlink(missing_ok=True)
         self.ps_args_log.unlink(missing_ok=True)
         full_env = dict(os.environ)
         full_env.update(
@@ -89,6 +102,9 @@ class Harness:
             RESTART_UNHEALTHY_STATE_DIR=str(self.state),
             TEST_CONTAINERS=str(self.containers),
             TEST_RESTART_LOG=str(self.restart_log),
+            TEST_START_LOG=str(self.start_log),
+            TEST_FAIL_START="",
+            TEST_RESTART_LEAVES_EXITED="",
             TEST_PS_ARGS_LOG=str(self.ps_args_log),
             TEST_FAIL_RESTART=fail_restart or "",
             # pin the thresholds: a developer's project settings may export
@@ -112,8 +128,16 @@ class Harness:
             return []
         return self.restart_log.read_text().split()
 
+    def starts(self):
+        if not self.start_log.exists():
+            return []
+        return self.start_log.read_text().split()
+
     def state_file(self, container):
         return self.state / container
+
+    def pending_file(self, container):
+        return self.state / f".pending-{container}"
 
 
 @pytest.fixture
@@ -392,3 +416,69 @@ def test_devmode_skips_everything(harness):
     )
     assert harness.restarts() == []
     assert "Skipping" in res.stdout
+
+
+# --- failed restart that leaves the container stopped (smoods CICD, Oct 2026)
+
+
+def test_failed_restart_leaving_container_exited_is_started_again(harness):
+    """'docker restart' fails halfway and leaves the container exited (137).
+    The script must notice and start it right away."""
+    res = harness.run(
+        [f"myproj_odoo running unhealthy 0 {_ts(400)} 0 false {_ts(400)}"],
+        fail_restart="myproj_odoo",
+        env={"TEST_RESTART_LEAVES_EXITED": "1"},
+    )
+    assert harness.starts() == ["myproj_odoo"]
+    assert "started it again" in res.stdout
+    assert not harness.pending_file("myproj_odoo").exists()
+    assert res.returncode == 0
+
+
+def test_failed_restart_and_failed_start_is_retried_next_tick(harness):
+    res = harness.run(
+        [f"myproj_odoo running unhealthy 0 {_ts(400)} 0 false {_ts(400)}"],
+        fail_restart="myproj_odoo",
+        env={
+            "TEST_RESTART_LEAVES_EXITED": "1",
+            "TEST_FAIL_START": "myproj_odoo",
+        },
+    )
+    assert res.returncode != 0
+    assert "DOWN" in res.stdout
+    assert harness.pending_file("myproj_odoo").exists()
+
+    # Next tick: exited with 137 and no OOM - normally "manual kill, hands
+    # off", and only just finished - but we caused it, so it is revived.
+    res = harness.run(
+        [f"myproj_odoo exited none 0 {_ts(400)} 137 false {_ts(30)}"]
+    )
+    assert harness.restarts() == ["myproj_odoo"]
+    assert "failed watchdog restart" in res.stdout
+    assert not harness.pending_file("myproj_odoo").exists()
+
+
+def test_pending_marker_dropped_once_container_runs(harness):
+    harness.state.mkdir()
+    harness.pending_file("myproj_odoo").touch()
+    res = harness.run(
+        [f"myproj_odoo running healthy 0 {_ts(400)} 0 false {_ts(400)}"]
+    )
+    assert harness.restarts() == []
+    assert "look fine" in res.stdout
+    assert not harness.pending_file("myproj_odoo").exists()
+
+
+def test_pending_marker_of_vanished_container_is_cleaned(harness):
+    harness.state.mkdir()
+    harness.pending_file("myproj_gone").touch()
+    harness.run([f"myproj_pg running healthy 0 {_ts(400)} 0 false {_ts(400)}"])
+    assert not harness.pending_file("myproj_gone").exists()
+    assert (harness.state / ".lock").exists()
+
+
+def test_sigkill_without_marker_still_left_alone(harness):
+    """The marker is the only thing that lifts the 'manual kill' rule."""
+    harness.run([f"myproj_odoo exited none 0 {_ts(400)} 137 false {_ts(400)}"])
+    assert harness.restarts() == []
+    assert harness.starts() == []
