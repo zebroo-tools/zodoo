@@ -1,0 +1,33 @@
+# Keep a pinned pgBackRest version installable after pgdg drops it
+#
+# PGBR_VERSION pins pgbackrest because every host talking to one repository
+# needs the SAME version (see the comment at PGBR_VERSION in the Dockerfiles).
+# apt.postgresql.org however only keeps the latest few releases: once a newer
+# pgbackrest is published, the pinned one disappears from the live repository
+# and every build fails with "Version '2.59.1-*' for 'pgbackrest' was not
+# found". Raising the pin is no way out - it would split a fleet whose hosts
+# share a repository.
+#
+# apt-archive.postgresql.org keeps all versions. It is added next to the live
+# source, signed by the same key (the keyring is taken from the existing pgdg
+# source, so this works for the official postgres images as well as for images
+# that set pgdg up via the postgres snippet), and with a low pin priority so it
+# never wins over the live repository - only an explicit `pkg=<version>` picks
+# from it.
+#
+# The archive is HTTPS-only (plain http redirects), hence ca-certificates.
+# Only active when PGBR_VERSION is set; requires `ARG PGBR_VERSION` before it.
+RUN if [ -n "$PGBR_VERSION" ]; then \
+      #___SNIPPET_APT_INSTALL___ \
+      ca-certificates && \
+      src=$(grep -h -m1 "apt.postgresql.org" /etc/apt/sources.list.d/*.list) && \
+      keyring=$(echo "$src" | sed -n 's/.*signed-by=\([^] ]*\).*/\1/p') && \
+      suite=$(echo "$src" | sed -n 's/.* \([a-z]*\)-pgdg .*/\1/p') && \
+      if [ -z "$keyring" ] || [ -z "$suite" ]; then \
+        echo "pgdg_archive: no usable pgdg source found: $src" >&2; exit 1; \
+      fi && \
+      echo "deb [signed-by=$keyring] https://apt-archive.postgresql.org/pub/repos/apt ${suite}-pgdg-archive main" \
+        > /etc/apt/sources.list.d/pgdg-archive.list && \
+      printf 'Package: *\nPin: origin apt-archive.postgresql.org\nPin-Priority: 100\n' \
+        > /etc/apt/preferences.d/pgdg-archive; \
+    fi

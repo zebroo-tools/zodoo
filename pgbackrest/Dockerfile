@@ -28,6 +28,7 @@ RUN #___SNIPPET_APT_INSTALL___ \
 # the backup itself (pgbackrest calls pg_backup_start/stop over a normal
 # connection).
 #___SNIPPET_POSTGRES___
+#___SNIPPET_PGDG_ARCHIVE___
 
 # pgbackrest from pgdg rather than the distribution: block-level incrementals
 # (2.46+) and the TLS server mode (2.37+) are exactly the two features this
