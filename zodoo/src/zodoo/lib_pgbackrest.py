@@ -2120,6 +2120,66 @@ def _wal_gaps(bereiche):
     return sum(max(0, n - 1) for n in je_kennung.values())
 
 
+def _oldest_backup_starts(info):
+    """archiveId -> erstes WAL-Segment der aeltesten Sicherung darin.
+
+    Aus `info --output=json`. Die archiveId setzt sich aus Hauptversion und
+    db-Id zusammen ("16-1"); jede Sicherung verweist ueber database.id auf
+    ihren db-Eintrag.
+    """
+    daten = (info or [{}])[0]
+    kennungen = {
+        e.get("id"): f"{e.get('version')}-{e.get('id')}"
+        for e in daten.get("db") or []
+    }
+    starts = {}
+    for backup in daten.get("backup") or []:
+        kennung = kennungen.get((backup.get("database") or {}).get("id"))
+        start = (backup.get("archive") or {}).get("start")
+        if kennung and start and start < starts.get(kennung, "~"):
+            starts[kennung] = start
+    return starts
+
+
+def _wal_gaps_after_backup(bereiche, starts):
+    """Luecken, ueber die eine Wiederherstellung tatsaechlich stolpert.
+
+    Eine Luecke VOR der aeltesten Sicherung stoert niemanden - dorthin fuehrt
+    ohnehin kein Weg zurueck, und bei jeder neuen Instanz gibt es sie. Zaehlt
+    nur, wo der Abschnitt nach der Luecke hinter dem Start der aeltesten
+    Sicherung beginnt. archiveIds ohne Sicherung (Reste vor einem
+    Major-Upgrade) zaehlen nicht. WAL-Namen sind gleich lange Hex-Strings,
+    der Textvergleich ist also auch der Positionsvergleich.
+    """
+    je_kennung = {}
+    for b in bereiche:
+        je_kennung.setdefault(b["archive"], []).append(b["von"])
+    luecken = 0
+    for kennung, anfaenge in je_kennung.items():
+        start = starts.get(kennung)
+        if start is None:
+            continue
+        luecken += sum(1 for von in sorted(anfaenge)[1:] if von > start)
+    return luecken
+
+
+def _backup_starts_bench(umgebung, stanza):
+    out = _docker(
+        "run",
+        "--rm",
+        *sum((["-v", m] for m in umgebung["mounts"]), []),
+        *_pgbr_als_benutzer(
+            umgebung["pgbackrest_image"], umgebung.get("run_user")
+        ),
+        "--stanza",
+        stanza,
+        "info",
+        "--output=json",
+        timeout=300,
+    )
+    return _oldest_backup_starts(json.loads(out.stdout))
+
+
 def run_repo_verify_bench(bench, stanza):
     """`pgbackrest verify` fuer EINEN fremden Bereich, vom Pruefstand aus.
 
@@ -2169,6 +2229,21 @@ def run_repo_verify_bench(bench, stanza):
         urteil, meldungen, bereiche = _read_verify_output(text, stanza)
         ergebnis["wal_bereiche"] = bereiche
         ergebnis["wal_gaps"] = _wal_gaps(bereiche)
+        if ergebnis["wal_gaps"]:
+            try:
+                ergebnis["wal_gaps_after_backup"] = _wal_gaps_after_backup(
+                    bereiche, _backup_starts_bench(umgebung, stanza)
+                )
+            except Exception as ex:  # noqa: BLE001
+                # Nicht gemessen darf nicht wie "keine Luecke" aussehen:
+                # dann zaehlt jede Luecke.
+                ergebnis["wal_gaps_after_backup"] = ergebnis["wal_gaps"]
+                ergebnis["wal_gaps_note"] = (
+                    f"Sicherungen nicht lesbar, alle Luecken gezaehlt: "
+                    f"{type(ex).__name__}: {ex}"
+                )[:500]
+        else:
+            ergebnis["wal_gaps_after_backup"] = 0
         if urteil is None:
             ergebnis["result"] = "failed"
             ergebnis["error"] = (
@@ -2367,12 +2442,14 @@ def pgbackrest_repo_verify(config, stanza, as_json, report_to, bench_config):
                 fg="green",
             )
             if gaps:
+                relevant = ergebnis.get("wal_gaps_after_backup", gaps)
                 # Kein Fehlschlag - pgBackRest nennt das nicht Fehler, und vor
                 # der ersten Sicherung ist eine Luecke normal. Aber es muss
                 # dastehen: zwischen zwei Abschnitten fuehrt kein Weg auf
                 # einen Zeitpunkt zurueck.
                 click.secho(
-                    f"  ACHTUNG: {gaps} Luecke(n) im WAL - "
+                    f"  ACHTUNG: {gaps} Luecke(n) im WAL, davon {relevant} "
+                    "nach der aeltesten Sicherung - "
                     + ", ".join(
                         f"{b['von']}..{b['bis']}"
                         for b in ergebnis.get("wal_bereiche") or []
