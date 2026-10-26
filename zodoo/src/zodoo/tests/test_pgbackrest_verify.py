@@ -1377,6 +1377,109 @@ def test_the_result_carries_the_gaps(monkeypatch):
     assert e["kind"] == "repo-verify"
 
 
+# Aelteste Sicherung beginnt bei ...25: die Luecke 21..23 liegt davor, nur
+# die Luecke 24..2B trifft eine Wiederherstellung.
+INFO_MIT_SICHERUNGEN = json.dumps(
+    [
+        {
+            "db": [
+                {"id": 1, "version": "16"},
+                {"id": 2, "version": "17"},
+            ],
+            "backup": [
+                {
+                    "database": {"id": 1},
+                    "archive": {"start": "000000010000000000000003"},
+                },
+                {
+                    "database": {"id": 2},
+                    "archive": {"start": "00000002000000000000002C"},
+                },
+                {
+                    "database": {"id": 2},
+                    "archive": {"start": "000000020000000000000025"},
+                },
+            ],
+        }
+    ]
+)
+
+
+def _fake_docker_mit_info(monkeypatch, ausgabe, info):
+    _fake_bench_environment(monkeypatch, ausgabe)
+
+    def docker(*args, **kw):
+        if "info" in args:
+            if isinstance(info, Exception):
+                raise info
+            return mock.Mock(stdout=info, stderr="", returncode=0)
+        return mock.Mock(stdout=ausgabe, stderr="", returncode=0)
+
+    monkeypatch.setattr(lp, "_docker", docker)
+
+
+def test_oldest_backup_start_per_archive_id():
+    starts = lp._oldest_backup_starts(json.loads(INFO_MIT_SICHERUNGEN))
+    assert starts == {
+        "16-1": "000000010000000000000003",
+        "17-2": "000000020000000000000025",
+    }
+    assert lp._oldest_backup_starts([]) == {}
+
+
+def test_only_gaps_after_the_oldest_backup_count():
+    """Eine Luecke vor der aeltesten Sicherung ist normal, danach nicht."""
+    _, _, bereiche = lp._read_verify_output(OUTPUT_WITH_GAPS, "kunde-a")
+    zaehle = lp._wal_gaps_after_backup
+    assert zaehle(bereiche, {"17-1": "000000020000000000000014"}) == 2
+    assert zaehle(bereiche, {"17-1": "000000020000000000000025"}) == 1
+    assert zaehle(bereiche, {"17-1": "000000020000000000000030"}) == 0
+    # archiveId ohne Sicherung (Rest vor einem Upgrade): zaehlt nicht.
+    assert zaehle(bereiche, {"18-2": "000000020000000000000014"}) == 0
+
+
+def test_the_result_carries_the_gaps_after_the_oldest_backup(monkeypatch):
+    info = json.dumps(
+        [
+            {
+                "db": [{"id": 1, "version": "17"}],
+                "backup": [
+                    {
+                        "database": {"id": 1},
+                        "archive": {"start": "000000020000000000000025"},
+                    }
+                ],
+            }
+        ]
+    )
+    _fake_docker_mit_info(monkeypatch, OUTPUT_WITH_GAPS, info)
+    e = lp.run_repo_verify_bench(dict(BENCH_S3), "kunde-a")
+    assert e["result"] == "passed"
+    assert e["wal_gaps"] == 2
+    assert e["wal_gaps_after_backup"] == 1
+    assert "wal_gaps_note" not in e
+
+
+def test_unreadable_backups_count_every_gap(monkeypatch):
+    """Nicht gemessen darf nicht wie 'keine Luecke' aussehen."""
+    _fake_docker_mit_info(
+        monkeypatch, OUTPUT_WITH_GAPS, RuntimeError("kein Repo")
+    )
+    e = lp.run_repo_verify_bench(dict(BENCH_S3), "kunde-a")
+    assert e["result"] == "passed"
+    assert e["wal_gaps_after_backup"] == 2
+    assert "kein Repo" in e["wal_gaps_note"]
+
+
+def test_no_gaps_needs_no_info_call(monkeypatch):
+    _fake_docker_mit_info(
+        monkeypatch, AUSGABE_SAUBER, RuntimeError("darf nicht laufen")
+    )
+    e = lp.run_repo_verify_bench(dict(BENCH_S3), "kunde-a")
+    assert e["wal_gaps_after_backup"] == 0
+    assert "wal_gaps_note" not in e
+
+
 def test_a_damaged_repository_still_fails(monkeypatch):
     _fake_bench_environment(monkeypatch, AUSGABE_KAPUTT)
     e = lp.run_repo_verify_bench(dict(BENCH_S3), "kunde-a")

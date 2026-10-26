@@ -1,0 +1,1 @@
+`odoo pgbackrest repo-verify` now reports `wal_gaps_after_backup`: only WAL gaps behind the start of the oldest backup, i.e. the ones a restore would actually hit. Gaps before the first backup stay informational. If the backups cannot be read, every gap is counted.
