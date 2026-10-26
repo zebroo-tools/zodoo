@@ -1,5 +1,11 @@
 # Changelog
 
+## 12.10.0
+
+- **Internal**: CI auf selbst gehostete Tools-Runner mit isolierten Profilen und Docker-Diensten umstellen; externe Fork-PRs bleiben GitHub-hosted.
+- **Feature**: pgbackrest repo-verify: WAL gaps after the oldest backup are counted separately (wal_gaps_after_backup), so monitoring can alert on gaps that actually break a restore
+
+
 ## 12.9.1
 
 - **Internal**: Bake test: heavy steps (init, reload, build, db reset, bake) now stream their output live into the CI log and abort after 20 minutes without any output, showing the last lines. Before, a hanging build sat out the full hour and its captured output was lost on timeout.

@@ -1,3 +1,0 @@
-type: feature
-description: "pgbackrest repo-verify: WAL gaps after the oldest backup are counted separately (wal_gaps_after_backup), so monitoring can alert on gaps that actually break a restore"
-breaking: false
