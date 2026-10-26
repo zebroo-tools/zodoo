@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.10.1
+
+- **Fix**: Container watchdog (cronjobs, restart_unhealthy_containers.sh): a failed 'docker restart' ("tried to kill container, but did not receive an exit event") can leave a container exited with 137, which the watchdog treated like a manual 'docker kill' and ignored - the CICD app then stayed down for days while the log said "All containers look fine". After a failed restart the watchdog now checks the container and starts it again with 'docker start'; if that fails too it leaves a marker and keeps retrying on every tick until the container runs. Manually stopped/killed containers are still left alone.
+
+
 ## 12.10.0
 
 - **Internal**: CI auf selbst gehostete Tools-Runner mit isolierten Profilen und Docker-Diensten umstellen; externe Fork-PRs bleiben GitHub-hosted.
