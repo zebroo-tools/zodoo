@@ -16,6 +16,7 @@ ARG PGBR_VERSION=
 CMD ["postgres"]
 
 #___SNIPPET_APT_PROXY___
+#___SNIPPET_PGDG_ARCHIVE___
 RUN #___SNIPPET_APT_INSTALL___ \
 postgresql-server-dev-14 python3-dev build-essential git python3-pip procps sockstat && \
 #___SNIPPET_APT_INSTALL___ \

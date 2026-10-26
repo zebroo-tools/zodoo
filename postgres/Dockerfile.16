@@ -16,6 +16,7 @@ ARG PGBR_VERSION=
 CMD ["postgres"]
 
 #___SNIPPET_APT_PROXY___
+#___SNIPPET_PGDG_ARCHIVE___
 
 COPY config* /
 COPY run.sh /run.sh
