@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.10.2
+
+- **Fix**: postgres/pgbackrest images: keep the pinned pgBackRest version installable. apt.postgresql.org dropped 2.59.1 (our PGBR_VERSION pin), so every postgres build failed with "Version '2.59.1-*' for 'pgbackrest' was not found". When PGBR_VERSION is set, apt-archive.postgresql.org is now added as an extra source (low pin priority, same signing key), so the pinned version still installs. The pin itself is unchanged - all hosts of a repository keep the same version.
+
+
 ## 12.10.1
 
 - **Fix**: Container watchdog (cronjobs, restart_unhealthy_containers.sh): a failed 'docker restart' ("tried to kill container, but did not receive an exit event") can leave a container exited with 137, which the watchdog treated like a manual 'docker kill' and ignored - the CICD app then stayed down for days while the log said "All containers look fine". After a failed restart the watchdog now checks the container and starts it again with 'docker start'; if that fails too it leaves a marker and keeps retrying on every tick until the container runs. Manually stopped/killed containers are still left alone.
