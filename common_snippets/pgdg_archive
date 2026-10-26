@@ -16,6 +16,10 @@
 # from it.
 #
 # The archive is HTTPS-only (plain http redirects), hence ca-certificates.
+# It is fetched DIRECT, not through the apt cacher: apt falls back to the
+# http proxy for https as well, and squid-deb-proxy answers CONNECT to hosts
+# outside its mirror list with 403. A pinned .deb is fetched once per image
+# build, so caching it is not worth widening the proxy for every host.
 # Only active when PGBR_VERSION is set; requires `ARG PGBR_VERSION` before it.
 RUN if [ -n "$PGBR_VERSION" ]; then \
       #___SNIPPET_APT_INSTALL___ \
@@ -29,5 +33,7 @@ RUN if [ -n "$PGBR_VERSION" ]; then \
       echo "deb [signed-by=$keyring] https://apt-archive.postgresql.org/pub/repos/apt ${suite}-pgdg-archive main" \
         > /etc/apt/sources.list.d/pgdg-archive.list && \
       printf 'Package: *\nPin: origin apt-archive.postgresql.org\nPin-Priority: 100\n' \
-        > /etc/apt/preferences.d/pgdg-archive; \
+        > /etc/apt/preferences.d/pgdg-archive && \
+      printf 'Acquire::https::Proxy::apt-archive.postgresql.org "DIRECT";\n' \
+        > /etc/apt/apt.conf.d/99pgdg-archive-direct; \
     fi
