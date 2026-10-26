@@ -10,6 +10,7 @@ the failure mode: a missing field rendered as "" and produced
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -468,6 +469,11 @@ def test_missing_openssl_says_so(tmp_path):
     import subprocess as sp
 
     install_dir = _install_dir_with_generator(tmp_path)
+    env = {"PATH": "/nonexistent", "HOME": str(tmp_path)}
+    # setup-python builds on self-hosted runners find libpython only via
+    # LD_LIBRARY_PATH; without it the interpreter dies before the script runs.
+    if os.environ.get("LD_LIBRARY_PATH"):
+        env["LD_LIBRARY_PATH"] = os.environ["LD_LIBRARY_PATH"]
     proc = sp.run(
         [
             sys.executable,
@@ -478,7 +484,7 @@ def test_missing_openssl_says_so(tmp_path):
         cwd=install_dir,
         capture_output=True,
         text=True,
-        env={"PATH": "/nonexistent", "HOME": str(tmp_path)},
+        env=env,
     )
     assert proc.returncode != 0
     ausgabe = proc.stdout + proc.stderr
