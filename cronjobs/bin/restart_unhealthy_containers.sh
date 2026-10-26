@@ -16,6 +16,12 @@ fi
 #      (e.g. a hanging healthcheck command).
 #   3. crashed-and-exited: without a restart policy (RESTART_CONTAINERS=0
 #      strips it), a crashed container sits in 'exited' forever.
+#   4. left-stopped-by-our-own-restart: 'docker restart' can fail halfway
+#      ("tried to kill container, but did not receive an exit event") and
+#      leave the container exited with 137 - indistinguishable from a manual
+#      'docker kill', so case 3 deliberately ignores it. On the smoods CICD
+#      this kept the app down for days, twice (Oct 2026), while this script
+#      reported "All containers look fine". See PENDING_PREFIX below.
 # Thresholds are deliberately generous so normal boot / brief restarts
 # don't trip them.
 #
@@ -56,6 +62,15 @@ if ! flock -n 9; then
   exit 0
 fi
 
+# Marker for "we tried to restart this container and it did not come back".
+# Written only by this script, after a failed restart that a follow-up
+# 'docker start' could not repair either. While the marker exists, a stopped
+# container is revived regardless of its exit code: we know the stop was not
+# intentional, because we caused it. The marker is dropped as soon as the
+# container runs again or no longer exists. Dot prefix: the stale-state
+# cleanup glob below must not treat it as an episode file.
+PENDING_PREFIX=".pending-"
+
 now_epoch=$(date -u +%s)
 to_restart=()
 declare -A seen_containers
@@ -88,8 +103,16 @@ while IFS= read -r container; do
   fi
 
   state_file="$STATE_DIR/$container"
+  pending_file="$STATE_DIR/${PENDING_PREFIX}${container}"
   reason=""
-  case "$status" in
+  if [ -f "$pending_file" ]; then
+    if [ "$status" = "running" ]; then
+      rm -f "$pending_file"
+    elif [ "$status" != "restarting" ]; then
+      reason="left ${status} by a failed watchdog restart (exit ${exit_code})"
+    fi
+  fi
+  [ -z "$reason" ] && case "$status" in
     running)
       if [ "$health" = "unhealthy" ]; then
         reason="unhealthy"
@@ -185,10 +208,16 @@ done < <(timeout 60 docker ps -a \
   --filter "label=com.docker.compose.project=${PROJECT_NAME}" \
   --format '{{.Names}}')
 
-# Drop episode state of containers that no longer exist.
+# Drop episode state and pending markers of containers that no longer exist.
 for state_file in "$STATE_DIR"/*; do
   [ -e "$state_file" ] || continue
   [ -n "${seen_containers[$(basename "$state_file")]:-}" ] || rm -f "$state_file"
+done
+for pending_file in "$STATE_DIR/${PENDING_PREFIX}"*; do
+  [ -e "$pending_file" ] || continue
+  name=$(basename "$pending_file")
+  name=${name#"$PENDING_PREFIX"}
+  [ -n "${seen_containers[$name]:-}" ] || rm -f "$pending_file"
 done
 
 if [ ${#to_restart[@]} -eq 0 ]; then
@@ -208,8 +237,24 @@ for entry in "${to_restart[@]}"; do
   reason="${entry#*|}"
   echo "🔄 Restarting container: $container ($reason)"
   if ! timeout 180 docker restart "$container"; then
-    echo "❌ Restart of '$container' FAILED."
-    failed=$((failed + 1))
+    # A failed restart may have stopped the container without starting it
+    # again (case 4 above). Check and start it ourselves instead of leaving
+    # it down until somebody notices.
+    state_after=$(timeout 60 docker inspect "$container" --format '{{.State.Status}}' 2>/dev/null)
+    state_after=${state_after%% *}
+    if [ "$state_after" = "running" ]; then
+      echo "❌ Restart of '$container' FAILED (container still running)."
+      failed=$((failed + 1))
+    elif timeout 180 docker start "$container"; then
+      echo "⚠️  Restart of '$container' failed and left it ${state_after:-in an unknown state} - started it again with 'docker start'."
+      rm -f "$STATE_DIR/${PENDING_PREFIX}${container}"
+    else
+      echo "❌ Restart of '$container' FAILED and 'docker start' failed too - container is DOWN (${state_after:-unknown}). Will retry on the next tick."
+      touch "$STATE_DIR/${PENDING_PREFIX}${container}"
+      failed=$((failed + 1))
+    fi
+  else
+    rm -f "$STATE_DIR/${PENDING_PREFIX}${container}"
   fi
   # Manual restart resets docker's RestartCount — start a fresh episode so
   # a persistent crash escalates again only after RESTARTING_STUCK_SECS
