@@ -59,7 +59,9 @@ jobs:
               exit 1
             fi
           fi
-          job_home=$(mktemp -d "$RUNNER_TEMP/tools-home.XXXXXX")
+          # Short prefix: the postgres socket lands below this home and
+          # Unix socket paths are limited to 107 bytes.
+          job_home=$(mktemp -d "$RUNNER_TEMP/h.XXXXXX")
           mkdir -p "$job_home/.local/bin" "$job_home/pipx" "$job_home/tmp" "$job_home/.docker"
           {
             echo "HOME=$job_home"
