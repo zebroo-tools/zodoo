@@ -1,0 +1,3 @@
+The project image's final cleanup deleted every locale except `en_US`, so modules calling `locale.setlocale(..., "de_DE.UTF-8")` at import time broke the registry and `odoo update` for all modules (#274). Even the kept locales had dangling links, because `locales-all` shares files across locale directories. The cleanup now dereferences the kept locales first, and the new setting `ODOO_KEEP_LOCALES` (default `en_US de_DE`; `en_US` is always kept) selects which ones stay.
+
+To check: `odoo reload && odoo build odoo`, then `docker run --rm --entrypoint locale <project>-odoo -a` lists `de_DE.utf8`, and `python3 -c 'import locale; locale.setlocale(locale.LC_COLLATE, "de_DE.UTF-8")'` in the container succeeds.
