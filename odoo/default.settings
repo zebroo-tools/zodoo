@@ -64,3 +64,9 @@ ZODOO_EMBED=0
 ODOO_STANDARD_IMAGE=0
 # Leer = odoo:${ODOO_VERSION_INT}; sonst z.B. ein eigenes Tag aus der Registry.
 ODOO_STANDARD_IMAGE_NAME=
+
+# Locales kept in the project image; the final cleanup deletes all others
+# from /usr/lib/locale. Space-separated name patterns (e.g. "de_DE fr_FR");
+# en_US is always kept.
+# Changes need `odoo reload && odoo build`.
+ODOO_KEEP_LOCALES=en_US de_DE
