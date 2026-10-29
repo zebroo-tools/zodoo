@@ -1,0 +1,3 @@
+type: fix
+description: "Proxy/dashboard: the Grafana location now only matches /system/ instead of every path starting with /system. Website URLs like /systemregal-... were caught by the dashboard password gate (title \"zodoo system\") instead of reaching Odoo. Check: open a shop URL starting with \"system\" -> Odoo page; /system, /logs and the dashboard login still work."
+breaking: false
