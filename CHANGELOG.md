@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.10.3
+
+- **Fix**: Proxy/dashboard: the Grafana location now only matches /system/ instead of every path starting with /system. Website URLs like /systemregal-... were caught by the dashboard password gate (title "zodoo system") instead of reaching Odoo. Check: open a shop URL starting with "system" -> Odoo page; /system, /logs and the dashboard login still work.
+
+
 ## 12.10.2
 
 - **Fix**: postgres/pgbackrest images: keep the pinned pgBackRest version installable. apt.postgresql.org dropped 2.59.1 (our PGBR_VERSION pin), so every postgres build failed with "Version '2.59.1-*' for 'pgbackrest' was not found". When PGBR_VERSION is set, apt-archive.postgresql.org is now added as an extra source (low pin priority, same signing key), so the pinned version still installs. The pin itself is unchanged - all hosts of a repository keep the same version.
