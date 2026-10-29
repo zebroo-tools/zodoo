@@ -1,0 +1,26 @@
+# Node.js from the official release tarball (pinned + sha256-checked) instead
+# of Ubuntu's nodejs 12, which no longer receives fixes (e.g. the brotli
+# decoder CVE-2026-111497). lessc is kept for modules shipping .less assets.
+# Bumping NODE_VERSION/NODE_SHA256_* changes the base hash and rebuilds the
+# base images.
+RUN NODE_VERSION=24.22.2 && \
+    NODE_SHA256_X64=361718c444e49af2ca5a110c83ba6a8901143f23ab285ebbef0341f391f482a9 && \
+    NODE_SHA256_ARM64=95c264150aceb7f3437a29fd6984924f5f8d1511ea3cbd6c508b83f6c555dae2 && \
+    LESS_VERSION=3.13.1 && \
+    ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" && \
+    case "$ARCH" in \
+        amd64) NODE_ARCH=x64; NODE_SHA256="$NODE_SHA256_X64" ;; \
+        arm64) NODE_ARCH=arm64; NODE_SHA256="$NODE_SHA256_ARM64" ;; \
+        *) echo "nodejs: unsupported arch '$ARCH'"; exit 1 ;; \
+    esac && \
+    NODE_TARBALL="node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.gz" && \
+    curl -fsSL -o "/tmp/${NODE_TARBALL}" \
+        "https://nodejs.org/dist/v${NODE_VERSION}/${NODE_TARBALL}" && \
+    echo "${NODE_SHA256}  /tmp/${NODE_TARBALL}" | sha256sum -c - && \
+    tar -xzf "/tmp/${NODE_TARBALL}" -C /usr/local --strip-components=1 --no-same-owner \
+        --exclude='*/CHANGELOG.md' --exclude='*/README.md' --exclude='*/LICENSE' && \
+    rm -f "/tmp/${NODE_TARBALL}" && \
+    npm install -g --no-fund --no-audit "less@${LESS_VERSION}" && \
+    npm cache clean --force && \
+    node --version && lessc --version
+RUN useradd -ms /bin/bash odoo

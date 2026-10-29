@@ -1,0 +1,9 @@
+# Pull in pending Ubuntu security fixes on top of the package list above.
+# The base image hash covers this file, so changing it rebuilds every
+# Odoo base image on the next `odoo build`. When a distro fix lands without
+# any other base change, bump SECURITY_REFRESH to force that rebuild; the
+# value is part of the RUN line so docker's layer cache is bypassed too.
+RUN SECURITY_REFRESH=2026-10-29 && \
+    apt-get $(cat /etc/apt_options) update && \
+    apt-get $(cat /etc/apt_options) -y --no-install-recommends upgrade && \
+    rm -rf /var/lib/apt/lists/*
