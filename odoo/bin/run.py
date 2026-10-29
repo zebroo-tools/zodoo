@@ -82,9 +82,15 @@ set_proxy_update_modules(False)
 if not TOUCH_URL:
     signal_warmup_done()
 
+# Odoo haengt --log-handler an das log_handler aus der Konfigurationsdatei
+# an, statt es zu ersetzen. Die config_webserver-Vorlagen setzen dort
+# "werkzeug:DEBUG"; ohne eigenen werkzeug-Eintrag hier landete trotz
+# ODOO_LOG_LEVEL=warn jeder HTTP-Request als INFO-Zeile im Loki (3DM:
+# 1,2 Mio Zeilen am Tag). Spaetere Eintraege gewinnen.
 exec_odoo(
     None,
     f"--log-level={LEVEL}",
     f"--log-handler=:{LEVEL.upper()}",
+    f"--log-handler=werkzeug:{LEVEL.upper()}",
     touch_url=TOUCH_URL,
 )

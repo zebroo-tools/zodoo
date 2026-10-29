@@ -1,0 +1,3 @@
+type: fix
+description: "Logs dashboard reaches further back: proxy access log hidden by default, 5000 lines instead of 1000, Loki queries may span the full retention. ODOO_LOG_LEVEL now also applies to werkzeug, so request lines no longer flood Loki at warn."
+breaking: false
