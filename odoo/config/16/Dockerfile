@@ -129,8 +129,6 @@ RUN #___SNIPPET_APT_INSTALL___ \
             htop \
             ca-certificates \
             curl \
-            node-less \
-            node-clean-css \
             tmux \
             libfreetype6-dev \
             libpng-dev \
@@ -184,9 +182,11 @@ COPY liberation-sans /usr/share/fonts/
 RUN fc-cache -f -v
 RUN locale-gen en_US.UTF-8 && dpkg-reconfigure locales
 
+#___SNIPPET_SECURITY_UPGRADE___
+
 #___SNIPPET_WKHTML2PDF___
 
-#___SNIPPET_NODEJS___
+#___SNIPPET_NODEJS_LTS___
 
 RUN \
 chown odoo:odoo /home/odoo -R && \
