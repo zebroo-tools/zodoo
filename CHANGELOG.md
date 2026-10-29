@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.10.4
+
+- **Fix**: Odoo base images 16-20: apply Ubuntu security updates (apt upgrade, e.g. libbrotli1 for CVE-2026-111497) and replace Ubuntu's Node.js 12 with pinned, checksum-verified Node.js 24 LTS (lessc 3.13.1 via npm, node-clean-css dropped). Bump SECURITY_REFRESH in common_snippets/security_upgrade to force a base rebuild for future distro fixes.
+
+
 ## 12.10.3
 
 - **Fix**: Proxy/dashboard: the Grafana location now only matches /system/ instead of every path starting with /system. Website URLs like /systemregal-... were caught by the dashboard password gate (title "zodoo system") instead of reaching Odoo. Check: open a shop URL starting with "system" -> Odoo page; /system, /logs and the dashboard login still work.
