@@ -90,3 +90,78 @@ class TestBuildUsesBuildProfiles:
             self._source().count("__get_cmd(config, profile=BUILD_PROFILES)")
             == 2
         )
+
+
+class TestUpRemovesStaleBuildOnlyContainers:
+    """A container created before BUILD_ONLY_PROFILE has to go on `up`.
+
+    compose does not touch it (the service is still declared, so it is no
+    orphan) and the watchdog keeps reviving it.
+    """
+
+    @staticmethod
+    def _config(tmp_path, services):
+        from types import SimpleNamespace
+
+        compose = tmp_path / "docker-compose.yml"
+        compose.write_text(yaml.safe_dump({"services": services}))
+        return SimpleNamespace(
+            project_name="proj", files={"docker_compose": compose}
+        )
+
+    def test_only_build_only_services_are_selected(self, tmp_path):
+        from zodoo.lib_control_with_docker import _build_only_services
+
+        config = self._config(
+            tmp_path,
+            {
+                "rsync": {"profiles": [consts.BUILD_ONLY_PROFILE]},
+                "odoo": {"profiles": ["auto"]},
+                "postgres": {},
+            },
+        )
+        assert _build_only_services(config) == ["rsync"]
+
+    def test_removes_containers_of_build_only_service(
+        self, tmp_path, monkeypatch
+    ):
+        import zodoo.lib_control_with_docker as lcd
+
+        config = self._config(
+            tmp_path,
+            {
+                "rsync": {"profiles": [consts.BUILD_ONLY_PROFILE]},
+                "odoo": {"profiles": ["auto"]},
+            },
+        )
+        queried, removed = [], []
+
+        def fake_check_output(cmd, **kwargs):
+            queried.append(cmd)
+            return "abc123\n"
+
+        monkeypatch.setattr(lcd.subprocess, "check_output", fake_check_output)
+        monkeypatch.setattr(lcd.subprocess, "call", removed.append)
+
+        lcd._remove_build_only_containers(config)
+
+        assert len(queried) == 1
+        assert "label=com.docker.compose.project=proj" in queried[0]
+        assert "label=com.docker.compose.service=rsync" in queried[0]
+        assert removed == [["docker", "rm", "-f", "abc123"]]
+
+    def test_nothing_to_remove(self, tmp_path, monkeypatch):
+        import zodoo.lib_control_with_docker as lcd
+
+        config = self._config(
+            tmp_path, {"rsync": {"profiles": [consts.BUILD_ONLY_PROFILE]}}
+        )
+        removed = []
+        monkeypatch.setattr(
+            lcd.subprocess, "check_output", lambda cmd, **kw: ""
+        )
+        monkeypatch.setattr(lcd.subprocess, "call", removed.append)
+
+        lcd._remove_build_only_containers(config)
+
+        assert removed == []
