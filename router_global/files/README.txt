@@ -43,4 +43,6 @@ Zertifikat ausstellen:
     --dns-ionos-credentials /etc/letsencrypt/ionos.ini \
     -d example.com -d "*.example.com"
 
-Erneuerung läuft automatisch via @monthly Cron (certbot renew).
+Erneuerung läuft automatisch zweimal täglich per Cron im Container
+(/etc/cron.d/certbot-renew, Ausgabe in docker logs, Details in
+/var/log/letsencrypt).
