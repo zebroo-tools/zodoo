@@ -1,3 +1,0 @@
-type: fix
-description: "odoo up entfernt alte Container von build_only-Services (rsync), die der Watchdog sonst endlos neu startet"
-breaking: false

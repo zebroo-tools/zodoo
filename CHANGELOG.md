@@ -1,5 +1,11 @@
 # Changelog
 
+## 12.10.5
+
+- **Fix**: odoo up entfernt alte Container von build_only-Services (rsync), die der Watchdog sonst endlos neu startet
+- **Fix**: Router (router_global): Let's-Encrypt-Zertifikate werden wieder automatisch erneuert. Der Cronjob im Router-Container lief nur monatlich und rief certbot ohne Pfad auf; seit certbot per pip in /usr/local/bin liegt, fand cron das Programm nicht, und keine Erneuerung kam mehr durch (cloud.zebroo.de ist am 29.10. abgelaufen). Jetzt zweimal täglich mit absolutem Pfad, Ausgabe in docker logs. Prüfen: nach Neubau des Router-Containers 'docker exec <router> cat /etc/cron.d/certbot-renew' zeigt die neue Zeile, 'docker logs' enthält nach dem nächsten Lauf keine 'certbot: not found'-Meldung.
+
+
 ## 12.10.4
 
 - **Fix**: Odoo base images 16-20: apply Ubuntu security updates (apt upgrade, e.g. libbrotli1 for CVE-2026-111497) and replace Ubuntu's Node.js 12 with pinned, checksum-verified Node.js 24 LTS (lessc 3.13.1 via npm, node-clean-css dropped). Bump SECURITY_REFRESH in common_snippets/security_upgrade to force a base rebuild for future distro fixes.

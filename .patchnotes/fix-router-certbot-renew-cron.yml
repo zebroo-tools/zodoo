@@ -1,3 +1,0 @@
-type: fix
-description: "Router (router_global): Let's-Encrypt-Zertifikate werden wieder automatisch erneuert. Der Cronjob im Router-Container lief nur monatlich und rief certbot ohne Pfad auf; seit certbot per pip in /usr/local/bin liegt, fand cron das Programm nicht, und keine Erneuerung kam mehr durch (cloud.zebroo.de ist am 29.10. abgelaufen). Jetzt zweimal täglich mit absolutem Pfad, Ausgabe in docker logs. Prüfen: nach Neubau des Router-Containers 'docker exec <router> cat /etc/cron.d/certbot-renew' zeigt die neue Zeile, 'docker logs' enthält nach dem nächsten Lauf keine 'certbot: not found'-Meldung."
-breaking: false
