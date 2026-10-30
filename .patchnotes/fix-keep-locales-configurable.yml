@@ -1,0 +1,3 @@
+type: fix
+description: "Odoo image keeps de_DE next to en_US and the kept locales work again; new setting ODOO_KEEP_LOCALES (#274)"
+breaking: false

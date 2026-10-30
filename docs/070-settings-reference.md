@@ -40,14 +40,15 @@ Or edit the files directly. Run `odoo reload` after manual edits.
 
 ## Odoo Server
 
-| Setting                  | Default | Description                                                                                                                                                            |
-| ------------------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ODOO_LOG_LEVEL`         | empty   | Odoo log level: `debug`, `info`, `warn`, `error`, `critical`. Empty: `warn` on real instances, `info` with `DEVMODE=1`. `warning` is accepted and written as `warn`. |
-| `ODOO_DEBUG_LOGLEVEL`    | `info`  | Log level inside the debug container.                                                                                                                                  |
-| `ODOO_MAX_CRON_THREADS`  | `2`     | Cron threads of the cronjobs role. Web server, queue jobs, update and debug keep the value from their own config file.                                                 |
-| `ODOO_WORKERS_WEB`       | `6`     | Number of Odoo web worker processes.                                                                                                                                   |
-| `ODOO_PYTHON_VERSION`    | —       | Python version for the Odoo container (e.g. `3.12`).                                                                                                                   |
-| `ODOO_INSTALL_LIBPOSTAL` | `0`     | **No effect.** Nothing reads it any more (checked 2026-09-06); libpostal was removed from the Odoo images. It is still written from `settings.txt` into every project. |
+| Setting                  | Default       | Description                                                                                                                                                                  |
+| ------------------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ODOO_LOG_LEVEL`         | empty         | Odoo log level: `debug`, `info`, `warn`, `error`, `critical`. Empty: `warn` on real instances, `info` with `DEVMODE=1`. `warning` is accepted and written as `warn`.         |
+| `ODOO_DEBUG_LOGLEVEL`    | `info`        | Log level inside the debug container.                                                                                                                                        |
+| `ODOO_MAX_CRON_THREADS`  | `2`           | Cron threads of the cronjobs role. Web server, queue jobs, update and debug keep the value from their own config file.                                                       |
+| `ODOO_WORKERS_WEB`       | `6`           | Number of Odoo web worker processes.                                                                                                                                         |
+| `ODOO_PYTHON_VERSION`    | —             | Python version for the Odoo container (e.g. `3.12`).                                                                                                                         |
+| `ODOO_KEEP_LOCALES`      | `en_US de_DE` | Locales kept in the project image (space-separated, e.g. `de_DE fr_FR`); the image cleanup deletes all others. `en_US` is always kept. Needs `odoo reload` and `odoo build`. |
+| `ODOO_INSTALL_LIBPOSTAL` | `0`           | **No effect.** Nothing reads it any more (checked 2026-09-06); libpostal was removed from the Odoo images. It is still written from `settings.txt` into every project.       |
 
 **Odoo 19 and later:** Odoo reads every config-file option also from an
 environment variable `ODOO_<OPTION>`, and the environment beats the config

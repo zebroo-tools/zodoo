@@ -106,6 +106,12 @@ WORKDIR /opt/src
 # inline cleanups that used to follow it. After this step no
 # apt operations are possible — /var/lib/dpkg is removed.
 # ============================================================
+# Locales to keep (setting ODOO_KEEP_LOCALES; en_US is always kept, the
+# image runs with LC_ALL=en_US.UTF-8). locales-all links files across
+# locale dirs (de_DE.utf8/LC_COLLATE -> ../aa_DJ.utf8/...), so the kept
+# ones are dereferenced before the rest is deleted.
+ARG ODOO_KEEP_LOCALES="en_US de_DE"
+# ============================================================
 RUN apt-get purge -y \
         imagemagick-dev libmagickcore-dev libmagickwand-dev \
         perl perl-base \
@@ -116,8 +122,16 @@ RUN apt-get purge -y \
     apt-get clean -y || true && \
     find /usr -name '*.a' -delete && \
     find / -type d -name __pycache__ -exec rm -Rf {} + 2> /dev/null || true && \
+    set -- && \
+    for l in en_US $ODOO_KEEP_LOCALES; do \
+        set -- "$@" ! -name "*${l}*"; \
+        for d in /usr/lib/locale/*"${l}"*; do \
+            [ -d "$d" ] || continue; \
+            cp -rL "$d" "$d.keep" && rm -rf "$d" && mv "$d.keep" "$d"; \
+        done; \
+    done && \
     find /usr/lib/locale -mindepth 1 -maxdepth 1 -type d \
-        ! -name '*en_US*' -exec rm -rf {} + || true && \
+        "$@" -exec rm -rf {} + || true && \
     rm -Rf \
         /usr/lib/*/ImageMagick*/modules-*/*/*.la \
         /usr/lib/*/ImageMagick*/modules-*/*/*.a \
