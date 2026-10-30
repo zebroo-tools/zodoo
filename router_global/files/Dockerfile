@@ -23,7 +23,13 @@ ADD run.sh /run.sh
 ADD bin/ /usr/local/bin/
 RUN chmod a+x /run.sh /usr/local/bin/sync_traefik_certs.py
 
-RUN echo "@monthly certbot renew >> /var/log/cron.log 2>&1" >/etc/cron.d/certbot-renew
-RUN crontab /etc/cron.d/certbot-renew
+# Twice a day, as Let's Encrypt recommends: certbot only acts on certificates
+# inside its 30-day window, so most runs do nothing. The old '@monthly' left no
+# room for one failed attempt (cloud.zebroo.de expired on 2026-10-29). Absolute
+# path because cron runs jobs with PATH=/usr/bin:/bin and pip puts certbot into
+# /usr/local/bin. Output goes to the container log (docker logs), the details
+# stay in /var/log/letsencrypt.
+RUN printf 'SHELL=/bin/sh\n17 3,15 * * * root /usr/local/bin/certbot renew --quiet >/proc/1/fd/1 2>&1\n' >/etc/cron.d/certbot-renew \
+    && chmod 0644 /etc/cron.d/certbot-renew
 
 CMD ./run.sh
