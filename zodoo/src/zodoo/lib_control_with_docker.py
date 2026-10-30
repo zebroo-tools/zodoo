@@ -322,6 +322,8 @@ def up(
             else:
                 raise
 
+    _remove_build_only_containers(config)
+
 
 def down(ctx, config, machines=[], volumes=False, remove_orphans=True):
     machines = list(machines)
@@ -387,6 +389,53 @@ def _remove_oneoff_containers(config, machines=None):
         if not ids:
             return
     subprocess.call(["docker", "rm", "-f"] + ids)
+
+
+def _build_only_services(config):
+    from .consts import BUILD_ONLY_PROFILE
+    from .tools import _parse_yaml
+
+    yml = _parse_yaml(config.files["docker_compose"].read_text())
+    return sorted(
+        name
+        for name, service in (yml.get("services", {}) or {}).items()
+        if BUILD_ONLY_PROFILE in ((service or {}).get("profiles") or [])
+    )
+
+
+def _remove_build_only_containers(config):
+    """Remove containers of services that are only built, never run.
+
+    Since BUILD_ONLY_PROFILE, `up` no longer creates them. But a project that
+    was started before that change still has the container from back then:
+    compose leaves it alone (the service is still declared, so it is no
+    orphan), and restart_unhealthy_containers.sh revives it every few minutes
+    because the rsync entrypoint exits 1 without arguments. strack_prod was
+    still doing that after the upgrade to 12.10.2.
+    """
+    for service in _build_only_services(config):
+        try:
+            out = subprocess.check_output(
+                [
+                    "docker",
+                    "ps",
+                    "-aq",
+                    "--filter",
+                    f"label=com.docker.compose.project={config.project_name}",
+                    "--filter",
+                    f"label=com.docker.compose.service={service}",
+                ],
+                text=True,
+            ).strip()
+        except subprocess.CalledProcessError:
+            continue
+        ids = [x for x in out.split("\n") if x]
+        if ids:
+            click.secho(
+                f"Removing stale container(s) of build-only service {service}",
+                fg="yellow",
+            )
+            subprocess.call(["docker", "rm", "-f"] + ids)
 
 
 def stop(ctx, config, machines=[]):
