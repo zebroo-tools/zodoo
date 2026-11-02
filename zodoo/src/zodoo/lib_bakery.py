@@ -37,6 +37,21 @@ def bakery(config):
     pass
 
 
+# Settings the baked image depends on. They go into the project settings
+# file, not only into the one-shot reload below: any later `odoo reload` -
+# also the implicit one of `odoo setting HUB_URL=...` before
+# `odoo registry push` - regenerates the Dockerfiles from the settings files.
+# Without ZODOO_EMBED=1 there, the image loses the COPY of the zodoo source,
+# keeps the zodoo_src.pth pointing at /opt/zodoo and fails at startup with
+# "No module named 'zodoo'".
+PERSISTED_BAKE_SETTINGS = ["SRC_EXTRA", "ZODOO_EMBED"]
+
+
+def _persist_bake_settings(config, metadata):
+    for key in PERSISTED_BAKE_SETTINGS:
+        update_setting(config, key, metadata[key])
+
+
 @bakery.command()
 @click.argument("params", nargs=-1)
 @pass_config
@@ -76,9 +91,7 @@ def bake(ctx, config, params):
             sorted(metadata.items(), key=lambda k: k[0].lower()),
         )
     )
-    # Force SRC_EXTRA=0 directly in the project settings file before reload
-    # so no settings file can override it and cause source code to be skipped.
-    update_setting(config, "SRC_EXTRA", "0")
+    _persist_bake_settings(config, metadata)
     Commands.invoke(
         ctx,
         "reload",

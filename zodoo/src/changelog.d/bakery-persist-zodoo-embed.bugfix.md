@@ -1,0 +1,1 @@
+`odoo bakery bake` speichert `ZODOO_EMBED=1` jetzt in den Projekt-Settings. Ein späteres `odoo reload`, etwa durch `odoo setting HUB_URL=…` vor `odoo registry push`, baut dadurch weiterhin ein Image mit eingebettetem zodoo. Vorher fehlte `/opt/zodoo` im Image, und der Container brach beim Start mit „No module named 'zodoo'" ab.
