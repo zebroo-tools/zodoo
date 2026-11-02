@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.10.6
+
+- **Fix**: odoo bakery bake schreibt ZODOO_EMBED=1 dauerhaft in die Projekt-Settings. Vorher ging der Wert beim nächsten odoo reload (z.B. durch odoo setting HUB_URL=...) verloren; das gebackene Image enthielt dann kein /opt/zodoo und brach beim Start mit "No module named 'zodoo'" ab.
+
+
 ## 12.10.5
 
 - **Fix**: odoo up entfernt alte Container von build_only-Services (rsync), die der Watchdog sonst endlos neu startet
