@@ -161,6 +161,13 @@ RUN apt-get purge -y \
     rm -f /usr/bin/aarch64-linux-gnu-lto-dump-11
 
 
+# MARKER PACK_LIBS BEGIN
+# Packing venv + /usr/share keeps the registry small, but every container
+# start has to unpack them again (odoolib/xtract_system_libs.sh) into the
+# root filesystem. Bakery images (ZODOO_EMBED=1) run in k8s/AWS, where the
+# root filesystem may be read-only - the composer drops this block there,
+# xtract_system_libs.sh then finds no archive and does nothing.
+
 # Tar venv + zodoo_pipx — now without __pycache__/.a leftovers
 RUN cd /opt && \
     #___SNIPPET_TAR___
@@ -171,6 +178,7 @@ RUN cd /opt && \
 RUN cd /usr && \
     #___SNIPPET_TAR___
     share | zstd $ZSTDOPTIONS > share.tar.zst && rm -Rf share && cd - '
+# MARKER PACK_LIBS END
 
 # Strip this build host's apt/pip proxy before the image is flattened and
 # pushed to the shared registry — otherwise a pulled image on another host

@@ -1843,6 +1843,22 @@ def _zodoo_embed_active(config):
     )
 
 
+_PACK_LIBS_BLOCK = re.compile(
+    r"^# MARKER PACK_LIBS BEGIN$.*?^# MARKER PACK_LIBS END$\n?",
+    re.MULTILINE | re.DOTALL,
+)
+
+
+def _strip_pack_libs_block(dockerfile_text):
+    """Drop the venv + /usr/share packing from a bakery Dockerfile.
+
+    Packed images unpack themselves on every start into the root
+    filesystem, which fails on a read-only root filesystem (k8s/AWS).
+    Bakery images therefore keep both directories unpacked.
+    """
+    return _PACK_LIBS_BLOCK.sub("", dockerfile_text)
+
+
 def _merge_odoo_dockerfile(config, yamlcompose):
     """
     If customs contains dockerfile, then append their execution
@@ -2016,6 +2032,10 @@ def _merge_odoo_dockerfile(config, yamlcompose):
                 odoo_docker_file.read_text().replace(
                     "#___SNIPPET_ZODOO_EMBED_SOURCE___", ""
                 )
+            )
+        else:
+            odoo_docker_file.write_text(
+                _strip_pack_libs_block(odoo_docker_file.read_text())
             )
 
         # include source code
