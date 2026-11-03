@@ -1,0 +1,3 @@
+type: internal
+description: "Bake E2E test rebuilds after a post-bake setting change and starts the image like a Kubernetes pod (env-only config, no /.dockerenv, real entrypoint) - the startup update must exit 0."
+breaking: false
