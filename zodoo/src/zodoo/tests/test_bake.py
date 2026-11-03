@@ -22,12 +22,69 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import yaml
 
 from .conftest import _run, requires_full_stack
 
-DEFAULT_VERSIONS = os.environ.get("ZODOO_BAKE_TEST_VERSIONS", "19.0").split(
-    ","
-)
+DEFAULT_VERSIONS = os.environ.get("ZODOO_BAKE_TEST_VERSIONS", "19.0").split(",")
+
+
+def _project_image(project_name, service):
+    """The image the project built for ``service`` (``<project>-<service>:``)."""
+    result = subprocess.run(
+        ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    images = [
+        line
+        for line in result.stdout.splitlines()
+        if f"{project_name}-{service}:" in line
+    ]
+    assert images, (
+        f"no {service} image for project '{project_name}' found.\n"
+        f"available:\n{result.stdout}"
+    )
+    return images[0]
+
+
+def _service_environment(project_name, service):
+    """Environment the generated compose file hands to ``service`` - in a
+    Kubernetes deployment exactly these values come in as pod env."""
+    compose = Path.home() / ".odoo" / "run" / project_name / "docker-compose.yml"
+    environment = (
+        yaml.safe_load(compose.read_text())["services"][service].get("environment")
+        or {}
+    )
+    if isinstance(environment, list):
+        environment = dict(item.split("=", 1) for item in environment)
+    # --env-file is line based; the container entrypoint flattens multi-line
+    # values the same way (see odoo_config.get_settings).
+    return {
+        k: "" if v is None else str(v).replace("\n", " ")
+        for k, v in environment.items()
+    }
+
+
+def _project_network(project_name):
+    result = subprocess.run(
+        [
+            "docker",
+            "network",
+            "ls",
+            "--filter",
+            f"label=com.docker.compose.project={project_name}",
+            "--format",
+            "{{.Name}}",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    networks = result.stdout.split()
+    assert networks, f"no docker network for project '{project_name}'"
+    return networks[0]
 
 
 @pytest.fixture
@@ -120,76 +177,71 @@ def test_bake_flow(version, isolated_home, tmp_path):
 
         # 5) Bake should have produced <project_name>.env in the customs dir.
         env_file = project_dir / f"{project_name}.env"
-        assert (
-            env_file.exists()
-        ), f"bake did not create the env file at {env_file}"
+        assert env_file.exists(), f"bake did not create the env file at {env_file}"
         env_content = env_file.read_text()
         assert "ODOO_DEMO=1" in env_content
         assert "SHA_IN_DOCKER=1" in env_content
         assert "SRC_EXTRA=0" in env_content
 
-        # 6) Docker images for the project should now exist locally.
-        result = subprocess.run(
-            ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}"],
-            capture_output=True,
-            text=True,
-            check=True,
+        # 6) Like a release pipeline: change a setting after bake, reload and
+        #    build the image that gets pushed. The bake settings must survive
+        #    this (zodoo <= 12.10.5 lost ZODOO_EMBED here and the image had no
+        #    /opt/zodoo).
+        _run(
+            ["odoo", "-p", project_name, "setting", "DOCKER_IMAGE_TAG=baketest"],
+            cwd=project_dir,
         )
-        images = result.stdout.splitlines()
-        assert any(project_name in line for line in images), (
-            f"no docker image tagged with project '{project_name}' found.\n"
-            f"available:\n{result.stdout}"
+        _run(["odoo", "-p", project_name, "reload"], cwd=project_dir, **heavy)
+        _run(
+            ["odoo", "-p", project_name, "build", "--no-zodoo-pull"],
+            cwd=project_dir,
+            **heavy,
         )
+        odoo_image = _project_image(project_name, "odoo")
 
-        # 7) Regression guard for the K8s-style startup flow.  The
-        # baked image is used in production as a root→sudo-u-odoo
-        # chain; we exercise the same chain locally to catch:
-        #   - PermissionError on /etc/odoo/config/* when templates
-        #     are copied as root and later re-copied as odoo
-        #     (fix/chown-config-files-recursive)
-        #   - "odoo is not in the sudoers file" when sudo_odoo_cmd
-        #     double-wraps sudo while already running as odoo
-        #     (fix/sudo-odoo-cmd-skip-when-already-odoo)
-        odoo_image = next(
-            (line for line in images if f"{project_name}-odoo:" in line),
-            None,
+        # 7) Start the image the way a Kubernetes pod does (EKS, containerd):
+        #    real entrypoint, configuration only from the environment, no
+        #    mounts, no /.dockerenv, cgroup v2 namespace showing only "0::/".
+        #    The startup update must finish with exit code 0 against the
+        #    project database (zodoo 12.10.7 failed here with "assert dbname").
+        _run(["odoo", "-p", project_name, "up", "-d", "postgres"], cwd=project_dir)
+        env = _service_environment(project_name, "odoo")
+        env["KUBERNETES_SERVICE_HOST"] = "10.0.0.1"
+        env["UPDATE_ON_STARTUP"] = "1"
+        env_file = tmp_path / "pod.env"
+        env_file.write_text("".join(f"{k}={v}\n" for k, v in env.items()))
+        result = _run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "--cgroupns",
+                "private",
+                "--network",
+                _project_network(project_name),
+                "--env-file",
+                env_file,
+                "--entrypoint",
+                "/bin/bash",
+                odoo_image,
+                "-c",
+                "rm -f /.dockerenv && "
+                "exec /odoolib/entrypoint.sh /odoolib/update_on_startup.py",
+            ],
+            cwd=project_dir,
+            check=False,
+            **heavy,
         )
-        if odoo_image:
-            run_result = subprocess.run(
-                [
-                    "docker",
-                    "run",
-                    "--rm",
-                    "-e",
-                    "ODOO_SUDO_CMD=1",
-                    "-e",
-                    "IS_ODOO_DEBUG=1",  # prepare_run then exit, no DB needed
-                    "-e",
-                    "DBNAME=baketest",
-                    "--entrypoint",
-                    "/bin/bash",
-                    odoo_image,
-                    "-c",
-                    # Run update_on_startup.py to exercise:
-                    # root → sudo_odoo_cmd("/odoolib/odoo update") → odoo
-                    # → /odoolib/odoo update → update_modules.py
-                    # → exec_odoo() → sudo_odoo_cmd(odoo-bin) [MUST NOT re-wrap]
-                    "python3 /odoolib/update_on_startup.py || true",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=300,
-            )
-            combined = run_result.stdout + run_result.stderr
-            assert "PermissionError" not in combined, (
-                "Permission bug re-introduced (see "
-                "fix/chown-config-files-recursive):\n" + combined[-2000:]
-            )
-            assert "not in the sudoers file" not in combined, (
-                "sudo double-wrap bug re-introduced (see "
-                "fix/sudo-odoo-cmd-skip-when-already-odoo):\n"
-                + combined[-2000:]
-            )
+        output = result.stdout + result.stderr
+        assert result.returncode == 0, (
+            f"startup update failed in pod-like container "
+            f"(exit {result.returncode}):\n{output[-4000:]}"
+        )
+        # Regression guards for the root -> sudo -u odoo chain
+        # (fix/chown-config-files-recursive,
+        # fix/sudo-odoo-cmd-skip-when-already-odoo).
+        assert "PermissionError" not in output, output[-2000:]
+        assert "not in the sudoers file" not in output, output[-2000:]
 
     finally:
         # Best-effort teardown so a failed run does not leave containers behind.
