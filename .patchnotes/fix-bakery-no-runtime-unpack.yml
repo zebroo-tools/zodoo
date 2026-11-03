@@ -1,0 +1,3 @@
+type: fix
+description: "Gebackene Images (odoo bakery bake, ZODOO_EMBED=1) packen /opt/venv, /opt/zodoo_pipx und /usr/share nicht mehr in tar.zst-Archive. Diese Archive wurden bei jedem Containerstart ins Root-Dateisystem entpackt; auf k8s/AWS mit schreibgeschütztem Root-Dateisystem bricht der Container dabei sofort ab. Lokale und CICD-Images packen weiter wie bisher."
+breaking: false
