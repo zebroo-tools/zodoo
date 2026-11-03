@@ -30,6 +30,9 @@ schema_config:
 
 limits_config:
   retention_period: ${DASHBOARD_LOKI_RETENTION}
+  # Stock limit is 30d1h: picking "This year" in Grafana then fails with
+  # "query time range exceeds the limit" although the data is retained.
+  max_query_length: ${DASHBOARD_LOKI_RETENTION}
   reject_old_samples: false
   allow_structured_metadata: true
   volume_enabled: true

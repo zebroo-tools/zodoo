@@ -83,6 +83,33 @@
         "hide": 0
       },
       {
+        "name": "proxylog",
+        "label": "Proxy access log",
+        "type": "custom",
+        "description": "Most of the log volume. Hidden by default so the log list reaches further back.",
+        "query": "hidden : .+_proxy, shown : __none__",
+        "includeAll": false,
+        "multi": false,
+        "current": {
+          "text": "hidden",
+          "value": ".+_proxy",
+          "selected": true
+        },
+        "options": [
+          {
+            "text": "hidden",
+            "value": ".+_proxy",
+            "selected": true
+          },
+          {
+            "text": "shown",
+            "value": "__none__",
+            "selected": false
+          }
+        ],
+        "hide": 0
+      },
+      {
         "name": "level",
         "label": "Level",
         "type": "custom",
@@ -259,7 +286,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sum by (container) (count_over_time({job=\"docker\", container=~\"$project.*\", container=~\"$container\"} |~ `(?i)$search` |~ `$level` [$__interval]))",
+          "expr": "sum by (container) (count_over_time({job=\"docker\", container=~\"$project.*\", container=~\"$container\", container!~\"$proxylog\"} |~ `(?i)$search` |~ `$level` [$__interval]))",
           "queryType": "range",
           "legendFormat": "{{container}}"
         }
@@ -284,7 +311,8 @@
         "tooltip": {
           "mode": "multi"
         }
-      }
+      },
+      "description": "Drag a range here to zoom the log list below into that period."
     },
     {
       "id": 5,
@@ -307,8 +335,9 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{job=\"docker\", container=~\"$project.*\", container=~\"$container\"} |~ `(?i)$search` |~ `$level`",
-          "queryType": "range"
+          "expr": "{job=\"docker\", container=~\"$project.*\", container=~\"$container\", container!~\"$proxylog\"} |~ `(?i)$search` |~ `$level`",
+          "queryType": "range",
+          "maxLines": 5000
         }
       ],
       "options": {
@@ -316,7 +345,8 @@
         "wrapLogMessage": true,
         "enableLogDetails": true,
         "sortOrder": "Descending"
-      }
+      },
+      "description": "Shows the newest 5000 matching lines of the selected time range. To look further back, drag a range in the volume chart above or narrow it down with the filters."
     }
   ]
 }
