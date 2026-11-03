@@ -2967,6 +2967,11 @@ def fast_file_hash(
 def _is_in_container():
     if Path("/.dockerenv").exists():
         return True
+    # Kubernetes (e.g. EKS with containerd and cgroup v2) creates no
+    # /.dockerenv and /proc/1/cgroup only shows "0::/", so neither check
+    # below matches. Every pod gets KUBERNETES_SERVICE_HOST injected.
+    if os.environ.get("KUBERNETES_SERVICE_HOST"):
+        return True
     try:
         cgroup = Path("/proc/1/cgroup").read_text()
         return (
