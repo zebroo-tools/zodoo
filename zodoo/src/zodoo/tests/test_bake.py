@@ -18,6 +18,7 @@ Versions tested are taken from the `ZODOO_BAKE_TEST_VERSIONS` env var
 """
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -136,6 +137,20 @@ def test_bake_flow(version, isolated_home, tmp_path):
             cwd=project_dir.parent,
             **heavy,
         )
+
+        # The template MANIFEST installs nothing; the startup update refuses
+        # to run without modules ("no modules to update"). A real project
+        # always has some, so give it the smallest possible one.
+        manifest = project_dir / "MANIFEST"
+        manifest.write_text(
+            re.sub(
+                r'"install":\s*\[\s*\]',
+                '"install": ["base"]',
+                manifest.read_text(),
+                count=1,
+            )
+        )
+        assert '"install": ["base"]' in manifest.read_text()
 
         # 2) Reload + build — init's internal reload runs without `-p`
         #    (derives project_name from cwd), then we need to build
