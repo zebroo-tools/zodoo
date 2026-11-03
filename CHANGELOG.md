@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.10.8
+
+- **Fix**: Container detection also recognises Kubernetes pods (KUBERNETES_SERVICE_HOST), so DBNAME and other settings are read from the pod environment on EKS/containerd.
+
+
 ## 12.10.7
 
 - **Fix**: Gebackene Images (odoo bakery bake, ZODOO_EMBED=1) packen /opt/venv, /opt/zodoo_pipx und /usr/share nicht mehr in tar.zst-Archive. Diese Archive wurden bei jedem Containerstart ins Root-Dateisystem entpackt; auf k8s/AWS mit schreibgeschütztem Root-Dateisystem bricht der Container dabei sofort ab. Lokale und CICD-Images packen weiter wie bisher.

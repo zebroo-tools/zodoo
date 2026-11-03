@@ -1,3 +1,0 @@
-type: fix
-description: "Container detection also recognises Kubernetes pods (KUBERNETES_SERVICE_HOST), so DBNAME and other settings are read from the pod environment on EKS/containerd."
-breaking: false
