@@ -107,9 +107,11 @@ WORKDIR /opt/src
 # apt operations are possible — /var/lib/dpkg is removed.
 # ============================================================
 # Locales to keep (setting ODOO_KEEP_LOCALES; en_US is always kept, the
-# image runs with LC_ALL=en_US.UTF-8). locales-all links files across
-# locale dirs (de_DE.utf8/LC_COLLATE -> ../aa_DJ.utf8/...), so the kept
-# ones are dereferenced before the rest is deleted.
+# image runs with LC_ALL=en_US.UTF-8). Bases without locales-all (Odoo
+# 17+) only ship en_US, so missing ones are generated into the
+# locale-archive; an unknown name fails the build. locales-all links
+# files across locale dirs (de_DE.utf8/LC_COLLATE -> ../aa_DJ.utf8/...),
+# so the kept dirs are dereferenced before the rest is deleted.
 ARG ODOO_KEEP_LOCALES="en_US de_DE"
 # ============================================================
 RUN apt-get purge -y \
@@ -125,6 +127,9 @@ RUN apt-get purge -y \
     set -- && \
     for l in en_US $ODOO_KEEP_LOCALES; do \
         set -- "$@" ! -name "*${l}*"; \
+        locale -a | grep -qix "${l}.utf-*8" || \
+            localedef -i "$l" -c -f UTF-8 "${l}.UTF-8" || \
+            { echo "ODOO_KEEP_LOCALES: cannot generate locale $l" >&2; exit 1; }; \
         for d in /usr/lib/locale/*"${l}"*; do \
             [ -d "$d" ] || continue; \
             cp -rL "$d" "$d.keep" && rm -rf "$d" && mv "$d.keep" "$d"; \
