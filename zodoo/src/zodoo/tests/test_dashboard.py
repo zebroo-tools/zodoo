@@ -74,6 +74,36 @@ def test_nav_links_bypass_grafana_router():
             assert f"location = {href} " in conf, f"{name}: {href}"
 
 
+def test_logs_list_reaches_back():
+    # The log list used to hold Grafana's default of 1000 lines, and the
+    # proxy access log filled them within seconds: a wider time range
+    # seemed to change nothing.
+    data = json.loads((DASHBOARDS / "zodoo-logs.json").read_text())
+    names = [v["name"] for v in data["templating"]["list"]]
+    assert "proxylog" in names
+    proxylog = next(
+        v for v in data["templating"]["list"] if v["name"] == "proxylog"
+    )
+    assert proxylog["current"]["value"] == ".+_proxy"
+    (logs_panel,) = [p for p in data["panels"] if p["type"] == "logs"]
+    target = logs_panel["targets"][0]
+    assert target["maxLines"] == 5000
+    assert 'container!~"$proxylog"' in target["expr"]
+
+
+def test_loki_queries_span_retention():
+    conf = (REPO_ROOT / "dashboard" / "config" / "loki-config.yml").read_text()
+    assert "max_query_length: ${DASHBOARD_LOKI_RETENTION}" in conf
+
+
+def test_odoo_run_sets_werkzeug_level():
+    # odoo-bin appends --log-handler to the config file's log_handler, which
+    # sets werkzeug:DEBUG; without an explicit werkzeug entry every request
+    # was logged despite ODOO_LOG_LEVEL=warn.
+    run_py = (REPO_ROOT / "odoo" / "bin" / "run.py").read_text()
+    assert '"--log-handler=werkzeug:{LEVEL.upper()}"' in run_py
+
+
 def _load_exporter(monkeypatch):
     """Import dashboard/exporter/app.py with its heavy deps stubbed."""
     monkeypatch.setitem(sys.modules, "psycopg2", mock.MagicMock())

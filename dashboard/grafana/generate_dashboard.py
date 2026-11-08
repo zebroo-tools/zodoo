@@ -156,8 +156,8 @@ def table(title, gridpos, targets, ds=LOKI, unit=None):
     return p
 
 
-def logs(title, gridpos, expr, ds=LOKI):
-    return {
+def logs(title, gridpos, expr, ds=LOKI, max_lines=None, description=None):
+    p = {
         "id": nid(),
         "type": "logs",
         "title": title,
@@ -178,6 +178,11 @@ def logs(title, gridpos, expr, ds=LOKI):
             "sortOrder": "Descending",
         },
     }
+    if max_lines:
+        p["targets"][0]["maxLines"] = max_lines
+    if description:
+        p["description"] = description
+    return p
 
 
 def rowp(title, y):
@@ -802,6 +807,27 @@ LOGS_VARS = [
         "hide": 0,
     },
     {
+        # The proxy's nginx access log is by far the loudest stream (3DM:
+        # 4.5 of 6 million lines a day). With it in, the line limit of the
+        # log list is used up by the last few seconds and changing the time
+        # range seems to do nothing. Hidden by default; "__none__" matches
+        # no container (an empty regex in !~ would hide everything).
+        "name": "proxylog",
+        "label": "Proxy access log",
+        "type": "custom",
+        "description": "Most of the log volume. Hidden by default so the "
+        "log list reaches further back.",
+        "query": "hidden : .+_proxy, shown : __none__",
+        "includeAll": False,
+        "multi": False,
+        "current": {"text": "hidden", "value": ".+_proxy", "selected": True},
+        "options": [
+            {"text": "hidden", "value": ".+_proxy", "selected": True},
+            {"text": "shown", "value": "__none__", "selected": False},
+        ],
+        "hide": 0,
+    },
+    {
         "name": "level",
         "label": "Level",
         "type": "custom",
@@ -827,8 +853,10 @@ LOGS_VARS = [
 # Selector honouring project scope + all three filters.
 #   search : case-INsensitive free text  (empty -> matches all)
 #   level  : case-SENSITIVE level regex   (All -> "." matches all)
+#   proxylog: container regex to leave out (see LOGS_VARS)
 SEL = (
-    '{job="docker", container=~"$project.*", container=~"$container"}'
+    '{job="docker", container=~"$project.*", container=~"$container",'
+    ' container!~"$proxylog"}'
     " |~ `(?i)$search` |~ `$level`"
 )
 
@@ -882,12 +910,20 @@ p.append(
         stacking="normal",
     )
 )
+p[-1]["description"] = (
+    "Drag a range here to zoom the log list below into that period."
+)
 y += 4
 p.append(
     logs(
         "Logs  -  Search (regex) / Container / Level filters above apply live",
         gp(0, y, 24, 24),
         SEL,
+        # Loki's max_entries_limit_per_query; Grafana's default is 1000.
+        max_lines=5000,
+        description="Shows the newest 5000 matching lines of the selected "
+        "time range. To look further back, drag a range in the volume chart "
+        "above or narrow it down with the filters.",
     )
 )
 y += 24

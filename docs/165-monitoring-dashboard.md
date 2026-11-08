@@ -51,3 +51,24 @@ python3 dashboard/grafana/generate_dashboard.py
 
 and commit the JSON files under `dashboard/grafana/dashboards/`. Grafana reads
 them again every 30 seconds, an instance needs no restart for a new link bar.
+
+## Looking further back in the logs
+
+The log list on `/logs` shows the newest 5000 matching lines of the selected
+time range (Loki's `max_entries_limit_per_query`). On a busy instance that can
+be only a few minutes, so a wider time range alone does not reach older lines.
+To look back, drag a range in the volume chart above the list — the list then
+shows that period — or narrow it down with Search, Container and Level.
+
+The proxy's access log is hidden by default (filter **Proxy access log**): it
+is by far the loudest stream and would use up the 5000 lines within seconds.
+Switch it to `shown` when you need the requests themselves.
+
+How far back data exists at all is `DASHBOARD_LOKI_RETENTION`. Queries may span
+the whole retention (`max_query_length` follows it), so "This year" no longer
+fails with "query time range exceeds the limit".
+
+Odoo's access log lines (`werkzeug`) follow `ODOO_LOG_LEVEL` as well. The
+`config_webserver` templates set `werkzeug:DEBUG`, and odoo-bin appends
+`--log-handler` to the file's value instead of replacing it, so `run.py` passes
+an explicit `werkzeug:<level>` too.
