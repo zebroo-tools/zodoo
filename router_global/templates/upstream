@@ -1,7 +1,10 @@
 {% set _ssl_on = (item.ssl_key_is_on_destination is defined and item.ssl_key_is_on_destination) or (item.ssl_server_cert is defined and item.ssl_server_cert) or (item.ssl_self_signed is defined and item.ssl_self_signed) %}
+{% set _resolve = item.upstream_resolve is defined and item.upstream_resolve %}
+{% if not _resolve %}
 upstream {{ item.upstream_name }} {
     server {{ item.upstream_server }}:{{ item.upstream_port }};
 }
+{% endif %}
 {% if item.rate_limit is defined and item.rate_limit %}
 # Ratenbegrenzung je Absender-IP. Gehoert in den http-Kontext, deshalb hier
 # oben und nicht im server-Block.
@@ -22,6 +25,16 @@ limit_req_zone $binary_remote_addr zone={{ item.upstream_name }}_rl:10m rate={{ 
 server {
         server_name  {{ item.server_name }};
         keepalive_timeout 60;
+{% if _resolve %}
+
+        # upstream_resolve: the backend is a container reached by its name in
+        # a docker network. An upstream block resolves that name once, when
+        # nginx loads - after the container is recreated with a new address
+        # the router keeps sending to the old one (502, or another container
+        # that took the address). With the name in a variable nginx asks
+        # docker's DNS at request time and keeps the answer for 10s.
+        resolver 127.0.0.11 valid=10s ipv6=off;
+{% endif %}
 
         proxy_buffers 16 1024k;
         proxy_buffer_size 256k;
@@ -80,7 +93,11 @@ server {
 # END Additional Headers by Ansible for {{ item.server_name }}
 {% endif %}
 
+{% if _resolve %}
+                set $var_{{ item.upstream_name }} {{ item.upstream_server }}:{{ item.upstream_port }};
+{% else %}
                 set $var_{{ item.upstream_name }} {{ item.upstream_name }};
+{% endif %}
 {% if item.upstream_scheme is defined and item.upstream_scheme == 'https' %}
                 # The backend speaks TLS itself. Certificate verification stays
                 # off (nginx's default for proxy_pass): these are our own

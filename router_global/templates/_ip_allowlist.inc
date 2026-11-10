@@ -22,7 +22,12 @@
 {% if path.strip() %}
         location ^~ {{ path.strip() }} {
             allow all;
+{% if item.upstream_resolve is defined and item.upstream_resolve %}
+            set $var_{{ item.upstream_name }} {{ item.upstream_server }}:{{ item.upstream_port }};
+            proxy_pass http://$var_{{ item.upstream_name }};
+{% else %}
             proxy_pass http://{{ item.upstream_name }};
+{% endif %}
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
