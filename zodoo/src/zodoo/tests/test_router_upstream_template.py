@@ -263,3 +263,59 @@ def test_custom_cert_vhost_gets_http_redirect_too():
         )
         assert "listen 443 ssl;" in out
         assert "return 301 https://$host$request_uri;" in out
+
+
+# --- upstream_resolve (#6218) ------------------------------------------------
+# A router in a docker network reaches the instance's proxy by container name.
+# Resolved once at load time, that name goes stale as soon as the instance is
+# recreated with a new address - 502, or a different container answering.
+
+
+def test_without_resolve_the_upstream_block_stays():
+    """Every existing vhost keeps its upstream group and no resolver."""
+    out = _render()
+    assert "upstream upstream_1 {" in out
+    assert "server 192.168.77.42:8444;" in out
+    assert "set $var_upstream_1 upstream_1;" in out
+    assert "resolver" not in out
+
+
+@pytest.mark.parametrize("value", [False, None, ""])
+def test_falsy_resolve_is_the_old_behaviour(value):
+    assert _render(upstream_resolve=value) == _render()
+
+
+def test_resolve_puts_the_name_in_the_variable():
+    out = _render(
+        upstream_server="kunde-proxy", upstream_port=80, upstream_resolve=True
+    )
+    # No upstream group: it would pin the address at load time, and nginx
+    # would refuse to start while the container is missing.
+    assert "upstream upstream_1 {" not in out
+    assert "resolver 127.0.0.11 valid=10s ipv6=off;" in out
+    assert "set $var_upstream_1 kunde-proxy:80;" in out
+    assert "proxy_pass http://$var_upstream_1;" in out
+
+
+def test_resolve_keeps_https_upstreams():
+    out = _render(upstream_resolve=True, upstream_scheme="https")
+    assert "proxy_pass https://$var_upstream_1;" in out
+
+
+def test_resolve_covers_allowlist_public_paths():
+    """The public paths of an allowlisted vhost go to the same backend.
+
+    They used to name the upstream group directly; without it they would
+    point at a group that no longer exists and nginx would not load.
+    """
+    out = _render(
+        upstream_server="kunde-proxy",
+        upstream_port=80,
+        upstream_resolve=True,
+        allowed_ips="10.0.0.0/8",
+        allowlist_public_paths="/api/webhook",
+    )
+    assert "proxy_pass http://upstream_1;" not in out
+    block = out.split("location ^~ /api/webhook {", 1)[1].split("}", 1)[0]
+    assert "set $var_upstream_1 kunde-proxy:80;" in block
+    assert "proxy_pass http://$var_upstream_1;" in block

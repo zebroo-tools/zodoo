@@ -1,0 +1,3 @@
+type: fix
+description: "Router: neues vHost-Feld upstream_resolve. Ist es gesetzt, löst nginx den Containernamen des Backends bei jeder Anfrage über Dockers DNS auf statt einmal beim Laden. Behebt den 502 des Routers auf der Kundenmaschine nach einem Neustart der Instanz. vHosts ohne das Feld bleiben unverändert."
+breaking: false

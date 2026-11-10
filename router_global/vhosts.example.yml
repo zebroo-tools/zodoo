@@ -90,3 +90,21 @@
   upstream_port: 8069
   timeout: 600
   ssl_self_signed: true
+
+# ---------------------------------------------------------------------------
+# 7. Backend ist ein Container im selben Docker-Netz (Router auf der Maschine
+#    der Instanz, "odoo router setup --network <netz>"). upstream_resolve: true
+#    loest den Containernamen bei jeder Anfrage ueber Dockers DNS (127.0.0.11)
+#    auf statt einmal beim Laden. Ohne das zeigt der Router nach einem
+#    Neustart der Instanz auf die alte Container-IP -> 502.
+#    Nur fuer Router in einem Docker-Netz, nicht fuer --host-network oder
+#    feste IPs.
+# ---------------------------------------------------------------------------
+- template: upstream
+  server_name: kunde.example.com
+  upstream_name: upstream_odoo
+  upstream_server: kunde-proxy # Containername des Proxys
+  upstream_port: 80
+  upstream_resolve: true
+  timeout: 600
+  use_certbot: true
