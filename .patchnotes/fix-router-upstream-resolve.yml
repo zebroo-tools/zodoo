@@ -10,6 +10,8 @@ description: |
   Verhalten mit dem Feld: die DNS-Antwort gilt höchstens 10 s, und nginx startet
   auch, wenn der Backend-Container gerade fehlt (bis er da ist: 502). Ohne das Feld
   bricht `nginx -t` in diesem Fall mit „host not found in upstream“ ab.
+  Bei gesetztem `allowed_ips` laufen die öffentlichen Pfade (`allowlist_public_paths`)
+  wie bisher über http, auch bei `upstream_scheme: https`.
   Prüfen: vHost mit `upstream_resolve: true`, `odoo router apply-vhosts`, Instanz
   neu starten (`odoo restart`), dann die öffentliche Adresse aufrufen: erwartet
   wird nach wenigen Sekunden der 303 auf /web/login, kein 502.
