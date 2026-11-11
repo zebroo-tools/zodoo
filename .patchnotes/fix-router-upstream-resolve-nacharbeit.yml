@@ -1,0 +1,3 @@
+type: internal
+description: "Router-Template: upstream_resolve wird nur noch an einer Stelle ausgewertet (die Allowlist-Pfade übernehmen den Wert aus dem Template). Patchnote zu upstream_resolve um Einsatzort und Prüfweg ergänzt."
+breaking: false
