@@ -1,3 +1,7 @@
+{# _resolve comes from the including template ("upstream"). Templates that do
+   not support upstream_resolve (upstream_direct_odoo) leave it undefined and
+   keep their upstream group here as well. #}
+{% set _allowlist_resolve = _resolve if _resolve is defined else false %}
 {% if item.allowed_ips is defined and item.allowed_ips %}
         # --- IP allowlist (virtual_host.allowed_ips) ---
         # Only these networks reach this vhost; everything else gets 403.
@@ -22,7 +26,9 @@
 {% if path.strip() %}
         location ^~ {{ path.strip() }} {
             allow all;
-{% if item.upstream_resolve is defined and item.upstream_resolve %}
+            # Always http here, also for upstream_scheme https - that is how the
+            # public paths behaved before upstream_resolve and is left unchanged.
+{% if _allowlist_resolve %}
             set $var_{{ item.upstream_name }} {{ item.upstream_server }}:{{ item.upstream_port }};
             proxy_pass http://$var_{{ item.upstream_name }};
 {% else %}

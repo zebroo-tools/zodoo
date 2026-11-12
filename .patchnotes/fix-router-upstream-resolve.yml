@@ -1,3 +1,18 @@
 type: fix
-description: "Router: neues vHost-Feld upstream_resolve. Ist es gesetzt, löst nginx den Containernamen des Backends bei jeder Anfrage über Dockers DNS auf statt einmal beim Laden. Behebt den 502 des Routers auf der Kundenmaschine nach einem Neustart der Instanz. vHosts ohne das Feld bleiben unverändert."
+description: |
+  Router: neues vHost-Feld `upstream_resolve: true` (Eintrag in der vhosts.yml des
+  Routers, Template `upstream`, Beispiel 7 in router_global/vhosts.example.yml).
+  Gesetzt löst nginx den Containernamen des Backends bei jeder Anfrage über Dockers
+  DNS (127.0.0.11) auf statt einmal beim Laden. Behebt den 502 des Routers auf der
+  Kundenmaschine nach einem Neustart der Instanz. Nur für einen Router im selben
+  Docker-Netz wie das Backend (`odoo router setup --network …`), nicht für
+  `--host-network` oder feste IPs. vHosts ohne das Feld bleiben unverändert.
+  Verhalten mit dem Feld: die DNS-Antwort gilt höchstens 10 s, und nginx startet
+  auch, wenn der Backend-Container gerade fehlt (bis er da ist: 502). Ohne das Feld
+  bricht `nginx -t` in diesem Fall mit „host not found in upstream“ ab.
+  Bei gesetztem `allowed_ips` laufen die öffentlichen Pfade (`allowlist_public_paths`)
+  wie bisher über http, auch bei `upstream_scheme: https`.
+  Prüfen: vHost mit `upstream_resolve: true`, `odoo router apply-vhosts`, Instanz
+  neu starten (`odoo restart`), dann die öffentliche Adresse aufrufen: erwartet
+  wird nach wenigen Sekunden der 303 auf /web/login, kein 502.
 breaking: false

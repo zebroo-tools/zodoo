@@ -319,3 +319,32 @@ def test_resolve_covers_allowlist_public_paths():
     block = out.split("location ^~ /api/webhook {", 1)[1].split("}", 1)[0]
     assert "set $var_upstream_1 kunde-proxy:80;" in block
     assert "proxy_pass http://$var_upstream_1;" in block
+
+
+def test_direct_odoo_template_ignores_resolve():
+    """upstream_direct_odoo has no resolve support: its allowlist paths must
+    keep using the upstream group it defines, not a variable."""
+    from jinja2 import Environment, FileSystemLoader
+
+    env = Environment(
+        loader=FileSystemLoader(str(_TEMPLATES)),
+        keep_trailing_newline=False,
+        trim_blocks=True,
+        lstrip_blocks=False,
+    )
+    out = env.get_template("upstream_direct_odoo").render(
+        item={
+            "template": "upstream_direct_odoo",
+            "server_name": "kunde.zebroo.de",
+            "upstream_name": "kunde_odoo",
+            "upstream_server": "192.168.77.130",
+            "upstream_port": 6000,
+            "timeout": 600,
+            "upstream_resolve": True,
+            "allowed_ips": "10.0.0.0/8",
+            "allowlist_public_paths": "/api/webhook",
+        }
+    )
+    assert "upstream kunde_odoo {" in out
+    block = out.split("location ^~ /api/webhook {", 1)[1].split("}", 1)[0]
+    assert "proxy_pass http://kunde_odoo;" in block
