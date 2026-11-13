@@ -632,6 +632,9 @@ def _determine_requirements(config, yml, PYTHON_VERSION, settings, globals):
         service["build"]["args"]["ODOO_PYTHON_VERSION"] = settings[
             "ODOO_PYTHON_VERSION"
         ]
+        service["build"]["args"]["ODOO_KEEP_LOCALES"] = (
+            settings.get("ODOO_KEEP_LOCALES") or ""
+        )
 
     config.files["native_collected_requirements_from_modules"].parent.mkdir(
         exist_ok=True, parents=True
