@@ -2005,3 +2005,63 @@ def test_an_invalid_protocol_timeout_is_a_config_error(monkeypatch, tmp_path, we
     assert gerufen == []
     assert erg["result"] == "failed"
     assert "protocol_timeout" in erg["error"]
+
+
+_RM = ("rm", "-f")
+
+
+def test_removal_already_in_progress_is_not_reported(monkeypatch):
+    """Parallel laeuft das --rm des Containers und `rm -f` trifft darauf.
+
+    Docker antwortet dann "removal of container ... is already in progress".
+    Der Container ist gleich weg - das ist kein Cleanup-Fehler.
+    """
+    docker = FakeDocker(
+        antworten={
+            _RM: (
+                1,
+                "",
+                "Error response from daemon: removal of container "
+                "verify-kunde-x is already in progress",
+            )
+        }
+    )
+    _probe_bis_zum_restore(monkeypatch, docker)
+    erg = lp._probe(dict(UMGEBUNG), "kunde")
+    assert erg["result"] == "passed", erg.get("error")
+    assert "cleanup_error" not in erg
+
+
+def test_no_such_container_is_still_not_reported(monkeypatch):
+    docker = FakeDocker(
+        antworten={
+            _RM: (
+                1,
+                "",
+                "Error response from daemon: No such container: verify-kunde-x",
+            )
+        }
+    )
+    _probe_bis_zum_restore(monkeypatch, docker)
+    erg = lp._probe(dict(UMGEBUNG), "kunde")
+    assert "cleanup_error" not in erg
+
+
+def test_a_real_container_removal_error_is_still_reported(monkeypatch):
+    """Neben einer harmlosen Zeile bleibt eine echte sichtbar."""
+    docker = FakeDocker(
+        antworten={
+            _RM: (
+                1,
+                "",
+                "Error response from daemon: removal of container a is "
+                "already in progress\n"
+                "Error response from daemon: cannot remove container b: "
+                "permission denied",
+            )
+        }
+    )
+    _probe_bis_zum_restore(monkeypatch, docker)
+    erg = lp._probe(dict(UMGEBUNG), "kunde")
+    assert "permission denied" in erg["cleanup_error"]
+    assert "already in progress" not in erg["cleanup_error"]
