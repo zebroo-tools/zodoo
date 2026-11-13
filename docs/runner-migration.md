@@ -13,6 +13,14 @@ Bake/Prebuild verlangen auf self-hosted zusätzlich einen separaten Docker-Diens
 (`DOCKER_HOST` und nach Prüfung `ZEBROO_DOCKER_ISOLATED=1`). Es wird kein
 Docker-Socket des Hosts in diese Umgebung durchgereicht.
 
+Das Job-Home (`$RUNNER_TEMP/h.*`) räumt der letzte Schritt von Bake und Prebuild
+selbst weg (`.github/scripts/cleanup-job-home.sh`, auch nach Fehler oder Abbruch).
+Der Runner schafft das nicht allein: Die Postgres-Container legen dort Socket und
+Logs mit umgemappter UID ab, die der Runner-Benutzer nicht löschen darf. Deshalb
+stoppt das Skript zuerst die Stacks des Jobs und löscht die Reste dann über einen
+kurzlebigen Container am selben Docker-Dienst. Es entfernt nur das eigene Job-Home
+des Jobs; gelingt das nicht, erscheint eine Warnung im Log, das Jobergebnis bleibt.
+
 Aktivierung erst nach zweiter Prüfung des Runner-Rollouts in Ticket 5697 und
 erfolgreichen Smokejobs. YAML, Runner-Auswahl, Job-Isolation und bestehende Hooks
 werden lokal geprüft; Laufzeittests auf dem neuen Pool fehlen bis zur Einrichtung.
