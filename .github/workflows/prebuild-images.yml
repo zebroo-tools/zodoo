@@ -34,6 +34,7 @@ on:
       - "dashboard/**"
       - "zodoo/src/zodoo/lib_zodoo_registry.py"
       - ".github/workflows/prebuild-images.yml"
+      - ".github/scripts/cleanup-job-home.sh"
   workflow_dispatch:
     inputs:
       versions:
@@ -77,6 +78,7 @@ jobs:
           job_home=$(mktemp -d "$RUNNER_TEMP/h.XXXXXX")
           mkdir -p "$job_home/.local/bin" "$job_home/pipx" "$job_home/tmp" "$job_home/.docker"
           {
+            echo "ZEBROO_JOB_HOME=$job_home"
             echo "HOME=$job_home"
             echo "PIPX_HOME=$job_home/pipx"
             echo "PIPX_BIN_DIR=$job_home/.local/bin"
@@ -307,3 +309,19 @@ jobs:
             rm -rf "$project"
             echo "::endgroup::"
           done
+
+      - name: Remove job home
+        # Must stay the last step. Containers write into the job home as a
+        # remapped UID that the runner user cannot delete, so the runner's own
+        # _temp cleanup fails and h.* piles up until the disk is full (see the
+        # script header). always(): also after failure, cancel and timeout.
+        if: always() && env.ZEBROO_JOB_HOME != ''
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: |
+          script="$GITHUB_WORKSPACE/.github/scripts/cleanup-job-home.sh"
+          if [[ ! -f "$script" ]]; then
+            echo "::warning::$script missing (checkout failed?), job home $ZEBROO_JOB_HOME stays"
+            exit 0
+          fi
+          bash "$script" "$ZEBROO_JOB_HOME"

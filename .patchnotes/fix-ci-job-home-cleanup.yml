@@ -1,0 +1,3 @@
+type: internal
+description: "CI: Bake and Prebuild remove their per-job home (_temp/h.*) at the end, also after failure or cancel. Files the postgres containers leave there with a remapped UID are deleted through a short-lived container; before, every job left its home behind until the runner disk was full."
+breaking: false
