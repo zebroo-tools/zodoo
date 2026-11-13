@@ -1449,6 +1449,11 @@ def _verify_start_and_read(postgres_image, volume, mounts, container):
     )
 
 
+# Dockers Antworten auf `rm -f`, die nur heissen "ist schon weg bzw. wird gerade
+# weggeraeumt". Beides ist kein Befund.
+_CLEANUP_HARMLOS = ("No such container", "is already in progress")
+
+
 def _verify_cleanup(container, volume):
     """Container und Wegwerf-Volume der Probe entfernen.
 
@@ -1483,12 +1488,15 @@ def _verify_cleanup(container, volume):
     out = versuche("rm", "-f", container, f"{container}-restore", *halter)
     if out is not None and out.returncode:
         # "No such container" fuer laengst entfernte Namen ist hier normal
-        # (--rm, oder es kam gar nicht so weit) und kein Befund. Alles andere
-        # ist der eigentliche Grund, warum das Volume gleich nicht weggeht.
+        # (--rm, oder es kam gar nicht so weit) und kein Befund. Ebenso
+        # "removal of container ... is already in progress": das --rm des
+        # Containers raeumt gerade selbst auf. Bleibt dabei etwas haengen, zeigt
+        # es spaetestens `volume rm` unten. Alles andere ist der eigentliche
+        # Grund, warum das Volume gleich nicht weggeht.
         rest = [
             z
             for z in meldung(out).splitlines()
-            if z.strip() and "No such container" not in z
+            if z.strip() and not any(h in z for h in _CLEANUP_HARMLOS)
         ]
         if rest:
             fehler.append("Container nicht entfernt: " + "\n".join(rest))
