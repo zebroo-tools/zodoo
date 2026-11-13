@@ -13,8 +13,9 @@
 # What it does, in this order:
 #   1. refuse anything that is not a directory "h.*" directly below
 #      $RUNNER_TEMP (never a glob, never another job's home);
-#   2. remove the containers, networks and volumes of the compose projects
-#      that live in this home (.odoo/run/<project>), so nothing keeps writing;
+#   2. remove the containers that mount something from this home (plus their
+#      named volumes), so nothing keeps writing into it; containers of other
+#      jobs on the shared daemon are not touched;
 #   3. try a plain rm -rf;
 #   4. if files are left, delete them from inside a throwaway container on
 #      the same Docker daemon (root there maps to the remapped UIDs), then
@@ -56,21 +57,36 @@ cd /
 have_docker=0
 command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1 && have_docker=1
 
-if [[ "$have_docker" == 1 && -d "$home_real/.odoo/run" ]]; then
-    for run_dir in "$home_real/.odoo/run"/*/; do
-        [[ -d "$run_dir" ]] || continue
-        project="$(basename "$run_dir")"
-        filter="label=com.docker.compose.project=$project"
-        mapfile -t ids < <(docker ps -aq --filter "$filter")
-        if ((${#ids[@]})); then
-            echo "cleanup-job-home: removing ${#ids[@]} container(s) of $project"
-            docker rm -f -v "${ids[@]}" >/dev/null || true
+if [[ "$have_docker" == 1 ]]; then
+    # Only containers that mount something from THIS home. The tools runners
+    # share one Docker daemon and the bake test uses fixed project names
+    # (baketest190), so selecting by compose project would also hit a bake
+    # running at the same time on the other runner (seen on 13.11.2026).
+    own=()
+    volumes=()
+    mapfile -t all < <(docker ps -aq --no-trunc)
+    for id in "${all[@]}"; do
+        mine=0
+        vols=()
+        while IFS='|' read -r mtype msrc mname; do
+            case "$msrc/" in "$home_real/"*) mine=1 ;; esac
+            [[ "$mtype" == volume && -n "$mname" ]] && vols+=("$mname")
+        done < <(docker inspect --format \
+            '{{range .Mounts}}{{.Type}}|{{.Source}}|{{.Name}}{{println}}{{end}}' \
+            "$id" 2>/dev/null)
+        if [[ "$mine" == 1 ]]; then
+            own+=("$id")
+            volumes+=("${vols[@]}")
         fi
-        mapfile -t ids < <(docker network ls -q --filter "$filter")
-        ((${#ids[@]})) && { docker network rm "${ids[@]}" >/dev/null || true; }
-        mapfile -t ids < <(docker volume ls -q --filter "$filter")
-        ((${#ids[@]})) && { docker volume rm -f "${ids[@]}" >/dev/null || true; }
     done
+    if ((${#own[@]})); then
+        echo "cleanup-job-home: removing ${#own[@]} container(s) using $home_real"
+        docker rm -f "${own[@]}" >/dev/null || true
+    fi
+    # Named volumes of those containers; docker refuses volumes still in use.
+    if ((${#volumes[@]})); then
+        docker volume rm "${volumes[@]}" >/dev/null 2>&1 || true
+    fi
 fi
 
 rm -rf "$home_real" 2>/dev/null

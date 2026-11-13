@@ -17,9 +17,12 @@ Das Job-Home (`$RUNNER_TEMP/h.*`) räumt der letzte Schritt von Bake und Prebuil
 selbst weg (`.github/scripts/cleanup-job-home.sh`, auch nach Fehler oder Abbruch).
 Der Runner schafft das nicht allein: Die Postgres-Container legen dort Socket und
 Logs mit umgemappter UID ab, die der Runner-Benutzer nicht löschen darf. Deshalb
-stoppt das Skript zuerst die Stacks des Jobs und löscht die Reste dann über einen
-kurzlebigen Container am selben Docker-Dienst. Es entfernt nur das eigene Job-Home
-des Jobs; gelingt das nicht, erscheint eine Warnung im Log, das Jobergebnis bleibt.
+entfernt das Skript zuerst die Container, die etwas aus diesem Job-Home eingebunden
+haben, und löscht die Reste dann über einen kurzlebigen Container am selben
+Docker-Dienst. Die Tools-Runner teilen sich diesen Dienst, und der Bake nutzt feste
+Projektnamen; deshalb wählt das Skript Container über ihre Mounts aus, nie über den
+Projektnamen. Es entfernt nur das eigene Job-Home des Jobs; gelingt das nicht,
+erscheint eine Warnung im Log, das Jobergebnis bleibt.
 
 Aktivierung erst nach zweiter Prüfung des Runner-Rollouts in Ticket 5697 und
 erfolgreichen Smokejobs. YAML, Runner-Auswahl, Job-Isolation und bestehende Hooks

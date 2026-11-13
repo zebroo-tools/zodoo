@@ -31,7 +31,14 @@ FAKE_DOCKER = r"""#!/usr/bin/env bash
 echo "$*" >> "$FAKE_DOCKER_LOG"
 case "$1" in
   info) exit "${FAKE_DOCKER_INFO_RC:-0}" ;;
-  ps) [[ -n "${FAKE_DOCKER_PS:-}" ]] && echo "$FAKE_DOCKER_PS"; exit 0 ;;
+  ps) for id in ${FAKE_DOCKER_PS:-}; do echo "$id"; done; exit 0 ;;
+  inspect)
+    id="${!#}"
+    [[ -f "${FAKE_DOCKER_MOUNTS:-}" ]] || exit 0
+    while IFS='|' read -r cid rest; do
+      [[ "$cid" == "$id" ]] && echo "$rest"
+    done < "$FAKE_DOCKER_MOUNTS"
+    exit 0 ;;
   run)
     for arg in "$@"; do
       case "$arg" in *:/job-home) src="${arg%:/job-home}" ;; esac
@@ -177,7 +184,6 @@ def test_refuses_without_runner_temp(env):
 def test_undeletable_files_go_through_docker(env):
     runner_temp, environ, log = env
     home, locked = _locked_home(runner_temp)
-    environ["FAKE_DOCKER_PS"] = "cid1"
     try:
         res = _run(home, environ)
     finally:
@@ -186,10 +192,39 @@ def test_undeletable_files_go_through_docker(env):
     assert res.returncode == 0, res.stdout + res.stderr
     assert not home.exists()
     calls = log.read_text()
-    assert "label=com.docker.compose.project=baketest190" in calls
-    assert "rm -f -v cid1" in calls
     assert f"{home.resolve()}:/job-home" in calls
     assert "--network none" in calls
+
+
+def test_only_containers_of_this_home_are_removed(env, tmp_path):
+    """The tools runners share one daemon and bake uses fixed project names:
+    a parallel bake (same project, other home) must survive."""
+    runner_temp, environ, log = env
+    home, locked = _locked_home(runner_temp)
+    other = (runner_temp / "h.abc123x").resolve()  # prefix of ours + "x"
+    sock = home.resolve() / ".odoo" / "run" / "baketest190" / "postgres.socket"
+    mounts = tmp_path / "mounts"
+    mounts.write_text(
+        f"own1|bind|{sock}|\n"
+        "own1|volume|/var/lib/docker/volumes/v1/_data|baketest190_pgdata\n"
+        f"par1|bind|{other}/.odoo/run/baketest190/postgres.socket|\n"
+        "par1|volume|/var/lib/docker/volumes/v2/_data|baketest190_other\n"
+        "unrel|bind|/srv/something|\n"
+    )
+    environ["FAKE_DOCKER_PS"] = "own1 par1 unrel"
+    environ["FAKE_DOCKER_MOUNTS"] = str(mounts)
+    try:
+        res = _run(home, environ)
+    finally:
+        _unlock(locked)
+
+    assert res.returncode == 0, res.stdout + res.stderr
+    removals = [l for l in log.read_text().splitlines() if l.startswith("rm ")]
+    assert removals == ["rm -f own1"]
+    assert "volume rm baketest190_pgdata" in log.read_text()
+    assert "baketest190_other" not in "".join(
+        l for l in log.read_text().splitlines() if l.startswith("volume")
+    )
 
 
 def test_leftovers_are_a_warning_not_a_failure(env):
