@@ -1,0 +1,3 @@
+type: fix
+description: 'odoo pgbackrest verify: "removal of container … is already in progress" (das --rm des Containers räumt gerade selbst auf) wird beim Aufräumen wie "No such container" nicht mehr als cleanup_error vermerkt. Andere Fehler und ein nicht entfernbares Volume bleiben sichtbar.'
+breaking: false
