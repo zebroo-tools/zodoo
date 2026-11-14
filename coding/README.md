@@ -14,11 +14,13 @@ odoo restart coding coding_trigger
 
 ## Access
 
-`/code/` is guarded by the same password gate as `/system` (see
-`proxy/lua/dashauth.lua`): one password, no user name, a signed cookie
-afterwards. The password is `CODING_PASSWORD`; it is generated on the first
-`odoo reload` of a real instance and left empty in DEVMODE, where the gate
-stays open. Read it with `odoo setting CODING_PASSWORD`.
+`/code/` is guarded by the same access gate as `/system/` (see
+`proxy/lua/dashauth.lua` and `docs/165-monitoring-dashboard.md`): zCloud opens
+it with a single-use ticket (key `GATE_SSO_KEY_CODE`, zCloud right `console`),
+a direct visit asks for `CODING_PASSWORD`. Either way a server-side session
+follows (8 h, 2 h idle, `/code/__logout` ends it). The password is generated
+on the first `odoo reload` of a real instance and left empty in DEVMODE, where
+the gate stays open. Read it with `odoo setting CODING_PASSWORD`.
 
 This matters because the editor has a terminal on the machine. An instance
 that can be reached from the internet must not serve it to everyone who knows

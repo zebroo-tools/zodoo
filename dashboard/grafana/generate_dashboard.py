@@ -206,8 +206,15 @@ def nav(y):
     links without a target and routes them inside its app, below root_url
     /system/ -- /logs became /system/logs (page not found). target="_self"
     makes the browser load the URL itself, so the proxy redirect applies.
+
+    "Abmelden" ends the gate session (proxy/lua/dashauth.lua); a link, since
+    a Grafana text panel cannot post a form.
     """
-    links = (("Overview", "/system"), ("Logs", "/logs"))
+    links = (
+        ("Overview", "/system"),
+        ("Logs", "/logs"),
+        ("Abmelden", "/system/__logout"),
+    )
     return {
         "id": nid(),
         "type": "text",

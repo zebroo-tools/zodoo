@@ -71,6 +71,9 @@ def test_nav_links_bypass_grafana_router():
         for attrs in anchors:
             assert 'target="_self"' in attrs, f"{name}: {attrs}"
             href = re.search(r'href="([^"]+)"', attrs).group(1)
+            if href == "/system/__logout":
+                # answered by the gate itself (proxy/lua/dashauth.lua)
+                continue
             assert f"location = {href} " in conf, f"{name}: {href}"
 
 

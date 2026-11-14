@@ -14,3 +14,22 @@ PROXY_DNS_SERVER=127.0.0.11
 # auto-refreshing maintenance page right away. After the timeout the API
 # client sees a 503 JSON {"error":"…"} instead of a dropped connection.
 WARMUP_PROXY_HOLD_S=120
+
+# Access gate for /system/ (dashboard) and /code/ (browser editor), see
+# proxy/lua/dashauth.lua and docs/165-monitoring-dashboard.md.
+#
+# Keys for the single-use sign-in tickets zCloud issues (HMAC-SHA256, one key
+# per instance and area). Set by zCloud on provisioning/deploy; never shown in
+# a browser. Empty -> no SSO for that area, the password page still works.
+GATE_SSO_KEY_SYSTEM=
+GATE_SSO_KEY_CODE=
+# Mark the gate cookie "Secure". Empty = yes, except in DEVMODE. TLS ends at
+# the router in front of this proxy, so the proxy itself cannot tell.
+GATE_COOKIE_SECURE=
+# Session lifetime after sign-in: absolute and without any request.
+GATE_SESSION_MAX_S=28800
+GATE_SESSION_IDLE_S=7200
+# Failed sign-in attempts (wrong password, refused ticket) allowed per
+# minute, plus burst, before the gate answers 429.
+GATE_LIMIT_PER_MIN=10
+GATE_LIMIT_BURST=5
