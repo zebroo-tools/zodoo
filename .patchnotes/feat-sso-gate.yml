@@ -5,7 +5,7 @@ description: |
   - The password page stays for direct visits. Both ways lead to a server-side session: 8 h at most, ends after 2 h without a request, cookie Secure (GATE_COOKIE_SECURE), HttpOnly, Path=/system/ or /code/. The old 30-day cookie with a fixed key is gone; everybody signs in once more.
   - New link "Abmelden" in the dashboard's link bar (/system/__logout, /code/__logout).
   - Without password and key the gate answers 503 outside DEVMODE instead of staying open.
-  - Fix: the throttle on failed logins never worked (limit_req runs after the gate had already answered). Now done inside the gate, only failed attempts count (GATE_LIMIT_PER_MIN, GATE_LIMIT_BURST).
+  - Fix: the throttle on failed logins never worked (limit_req runs after the gate had already answered). Now done inside the gate for the password login; only wrong passwords count (GATE_LIMIT_PER_MIN, GATE_LIMIT_BURST). Tickets are not throttled, so nobody can lock out the zCloud way in.
   - /codevim and /novim now redirect to /code/?vim=1|0.
   To test: rebuild the proxy (odoo reload && odoo build proxy && odoo up -d proxy). Open /system/d/... without cookie -> password page; log in -> dashboard; click "Abmelden" -> password page again. Until the proxy is rebuilt the old gate keeps working.
 breaking: false

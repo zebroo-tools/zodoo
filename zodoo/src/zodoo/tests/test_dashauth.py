@@ -288,7 +288,8 @@ def test_no_cookie_401(proxy, path):
 def test_valid_ticket_opens(proxy):
     st, hdr, _, sc = proxy.sso(make_ticket(KEY_SYSTEM))
     assert st == 302
-    assert hdr["Location"].endswith("/system/")
+    # relative: an absolute http:// URL would downgrade behind the router
+    assert hdr["Location"] == "/system/"
     sid, raw = _session_cookie(sc, "zodoo_gate_system")
     assert sid
     for attr in ("Secure", "HttpOnly", "Path=/system/", "SameSite=Lax"):
@@ -413,7 +414,7 @@ def test_logout(proxy):
     ck = _login_sso(proxy)
     assert proxy.request("GET", "/system/api/x", cookies=ck)[0] == 200
     st, hdr, _, sc = proxy.request("GET", "/system/__logout", cookies=ck)
-    assert st == 302 and hdr["Location"].endswith("/system/")
+    assert st == 302 and hdr["Location"] == "/system/"
     assert any(
         c.startswith("zodoo_gate_system=;") and "Max-Age=0" in c for c in sc
     )
@@ -500,10 +501,15 @@ def test_rate_limit_password(start_proxy):
     )
 
 
-def test_rate_limit_ticket(start_proxy):
+def test_refused_tickets_cannot_lock_anybody_out(start_proxy):
+    """Behind the router everybody shares one address: garbage tickets must
+    not use up a budget that valid tickets or the password then lack."""
     p = start_proxy(_defaults(FULL_ENV))
-    codes = [p.sso("x")[0] for _ in range(12)]
-    assert 429 in codes, codes
+    codes = [p.sso("x")[0] for _ in range(30)]
+    assert set(codes) == {401}, codes
+    assert p.sso(make_ticket(KEY_SYSTEM))[0] == 302
+    st, *_ = p.request("POST", "/system/__auth", {"password": "dash-pw"})
+    assert st == 302
 
 
 def test_successful_logins_are_not_throttled(start_proxy):
@@ -552,6 +558,33 @@ def test_without_sso_keys_password_works(start_proxy):
     assert st == 401
     st, _, _, sc = p.request("POST", "/code/__auth", {"password": "cp"})
     assert st == 302
+
+
+def test_vim_toggle_needs_the_gate(proxy):
+    st, _, body, _ = proxy.request("GET", "/code/?vim=1")
+    assert st == 401 and "backend:" not in body
+
+
+def test_old_and_new_cookie_together(proxy):
+    ck = _login_sso(proxy)
+    header = f"zodoo_gate_system=oldvalue; zodoo_gate_system={ck['zodoo_gate_system']}"
+    conn = http.client.HTTPConnection("127.0.0.1", proxy.port, timeout=10)
+    conn.request("GET", "/system/api/x", headers={"Host": HOST, "Cookie": header})
+    assert conn.getresponse().status == 200
+    conn.close()
+
+
+def test_cookie_secure_switched_off(start_proxy):
+    p = start_proxy(dict(FULL_ENV, GATE_COOKIE_SECURE="0"))
+    st, _, _, sc = p.request("POST", "/system/__auth", {"password": "dash-pw"})
+    sid, raw = _session_cookie(sc, "zodoo_gate_system")
+    assert st == 302 and sid and "Secure" not in raw
+
+
+def test_old_proxy_image_without_password_fails_closed(start_proxy):
+    p = start_proxy({"DEVMODE": "0"}, legacy=True)
+    assert p.request("GET", "/system/api/x")[0] == 503
+    assert p.request("GET", "/code/")[0] == 503
 
 
 def test_old_proxy_image_keeps_password_gate(start_proxy):

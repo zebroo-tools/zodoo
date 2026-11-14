@@ -28,6 +28,10 @@
 -- password-only behaviour instead of answering 500.
 
 local has_core, core = pcall(require, "gatecore")
+if not has_core and not tostring(core):find("not found", 1, true) then
+    -- gatecore is there but broken: say so loudly, not just as a fallback
+    ngx.log(ngx.ERR, "gate: cannot load gatecore: ", core)
+end
 
 local _M = {}
 
@@ -115,7 +119,7 @@ local function clear_cookies(a, secure)
     }
 end
 
--- Failed attempts at __auth/__sso: GATE_LIMIT_PER_MIN (10) per minute,
+-- Failed password attempts at __auth: GATE_LIMIT_PER_MIN (10) per minute,
 -- burst GATE_LIMIT_BURST (5), per client
 -- address (see gate.http.conf for why this is not limit_req). Only failures
 -- count: behind the router all users share one address, and a team opening
@@ -165,10 +169,15 @@ end
 -- Previous gate, unchanged: cookie = HMAC-SHA1 of the password with a fixed
 -- secret, Path=/, 30 days. Only used until the proxy is rebuilt.
 local function legacy_gate(password, base_path, titel)
-    if not password or password == "" then
-        return
-    end
     local base = base_path or DEFAULT_BASE
+    if not password or password == "" then
+        if os.getenv("DEVMODE") == "1" then
+            return
+        end
+        -- fail closed here too (no password, no gatecore to do SSO)
+        return respond(503, titel or ("zodoo " .. base:gsub("^/", "")),
+            "Zugang nicht eingerichtet.")
+    end
     local name = base:gsub("^/", ""):gsub("[^%w_]", "_")
     local cookie, auth_path = "zodoo_gate_" .. name, base .. "/__auth"
     titel = titel or ("zodoo " .. base:gsub("^/", ""))
@@ -253,8 +262,10 @@ function _M.gate(password, base_path, titel)
         return redirect(a.base .. "/", clear_cookies(a, cfg.secure))
     end
 
-    if (uri == a.sso or uri == a.auth) and method == "POST" and throttle(false)
-    then
+    -- Only the password is throttled. A ticket cannot be guessed (HMAC), and
+    -- counting refused tickets would let anyone lock out every zCloud user:
+    -- behind the router all requests share one address.
+    if uri == a.auth and method == "POST" and throttle(false) then
         ngx.header["Retry-After"] = "60"
         return respond(429, titel, "Zu viele Versuche. Bitte kurz warten.")
     end
@@ -283,7 +294,6 @@ function _M.gate(password, base_path, titel)
         end
         if not claims then
             ngx.log(ngx.WARN, "gate ", a.base, ": ticket refused: ", why)
-            throttle(true)
             return respond(401, titel,
                 "Link abgelaufen oder ungültig. Bitte erneut aus zCloud öffnen.",
                 auth_path)

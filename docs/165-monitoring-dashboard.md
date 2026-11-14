@@ -55,9 +55,18 @@ What the gate does without credentials: in DEVMODE with neither password nor
 key it stays open, as before. On every other instance it answers **503
 "Zugang nicht eingerichtet"** instead of showing the dashboard to everyone.
 
-Failed attempts (wrong password, refused ticket) are throttled: after
-`GATE_LIMIT_PER_MIN` (10) per minute plus `GATE_LIMIT_BURST` (5) the gate
-answers 429. Successful sign-ins do not count.
+Wrong passwords are throttled: after `GATE_LIMIT_PER_MIN` (10) per minute
+plus `GATE_LIMIT_BURST` (5) the password login answers 429. Behind the router
+all requests share one address, so this budget is shared too; successful
+sign-ins and tickets do not count, and the way in from zCloud stays open.
+
+Good to know:
+
+- An open dashboard tab refreshes every 30 seconds and so keeps its session
+  alive; for `/system/` the 8-hour limit is the one that ends it.
+- Logout and expiry stop new requests. A WebSocket that is already open (the
+  editor's terminal, Grafana Live) stays open until it closes; to cut it off
+  at once, restart the service (`odoo restart coding`).
 
 ### Settings (proxy)
 
@@ -83,7 +92,9 @@ ticket  = base64url(payload) "." base64url(HMAC-SHA256(key, base64url(payload)))
 payload = "1|<host>|<area>|<user id>|<iat>|<exp>|<jti>"
 ```
 
-`<host>` is the instance's host name without port, `<area>` is `/system` or
+The key is the setting's value as a string (its UTF-8 bytes), not hex-decoded.
+`<host>` is the instance's host name without port (what nginx sees as
+`$host`), `<area>` is `/system` or
 `/code`, `iat`/`exp` are Unix seconds (at most 300 s apart; the proxy allows
 30 s clock skew), `<jti>` is a random id of at least 16 characters. base64url
 without padding. The proxy remembers used ids until they expire.
