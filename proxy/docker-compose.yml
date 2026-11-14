@@ -30,6 +30,8 @@ services:
       - $ODOO_IMAGES/proxy/lua/template.lua:/opt/template.lua
       - ${ODOO_IMAGES}/proxy/lua/myngx.lua:/usr/local/openresty/luajit/share/lua/5.1/myngx.lua
       - ${ODOO_IMAGES}/proxy/lua/dashauth.lua:/usr/local/openresty/luajit/share/lua/5.1/dashauth.lua
+      - ${ODOO_IMAGES}/proxy/lua/gatecore.lua:/usr/local/openresty/luajit/share/lua/5.1/gatecore.lua
+      - ${ODOO_IMAGES}/proxy/gate.http.conf:/usr/local/openresty/nginx/conf/gate.http.conf
       - dashboard_nginx_logs:/var/log/nginx
 
     logging:

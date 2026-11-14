@@ -170,7 +170,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "<a href=\"/system\" target=\"_self\">Overview</a> &nbsp;|&nbsp; <a href=\"/logs\" target=\"_self\">Logs</a>"
+        "content": "<a href=\"/system\" target=\"_self\">Overview</a> &nbsp;|&nbsp; <a href=\"/logs\" target=\"_self\">Logs</a> &nbsp;|&nbsp; <a href=\"/system/__logout\" target=\"_self\">Abmelden</a>"
       }
     },
     {

@@ -27,14 +27,81 @@ Grafana itself lives below `/system/` (`root_url` with
 `serve_from_sub_path`), so the real dashboard addresses look like
 `/system/d/zodoo-logs/zodoo-logs`.
 
-Both URLs ask for `DASHBOARD_PASSWORD` — a password only, no user name. On
-non-DEVMODE instances it is generated automatically; `odoo status
---show-secrets` shows it. In DEVMODE the password is empty and there is no
-prompt.
+## Access
+
+`/system/` (and with it `/logs`) is behind an access gate in the proxy
+(`proxy/lua/dashauth.lua`). The browser editor `/code/` uses the same gate
+with its own secrets. There are two ways in:
+
+- **From zCloud, without a password.** The button "Open monitoring" (or "Open
+  editor") asks the zCloud backend for a ticket. zCloud checks your session
+  and your rights (monitoring: access to the project; editor: the right
+  `console`) and signs a ticket that is valid for 60 seconds, only once, only
+  for this host and only for this area. The browser POSTs it to
+  `/system/__sso` (`/code/__sso`); it never appears in a URL.
+- **Directly, with the password.** Without a session the gate shows the
+  password page (`DASHBOARD_PASSWORD`, `CODING_PASSWORD`). On non-DEVMODE
+  instances the password is generated automatically; `odoo status
+--show-secrets` shows it.
+
+Both lead to the same server-side session: cookie `zodoo_gate_system`
+(`zodoo_gate_code`), `Path=/system/` (`/code/`), `HttpOnly`, `SameSite=Lax`,
+`Secure`. It ends after 8 hours, or after 2 hours without a request, or with
+**Abmelden** in the link bar (`/system/__logout`, `/code/__logout`). Changing
+the password or the key ends the sessions made with it. A restart of the proxy
+ends all sessions; open it from zCloud again.
+
+What the gate does without credentials: in DEVMODE with neither password nor
+key it stays open, as before. On every other instance it answers **503
+"Zugang nicht eingerichtet"** instead of showing the dashboard to everyone.
+
+Failed attempts (wrong password, refused ticket) are throttled: after
+`GATE_LIMIT_PER_MIN` (10) per minute plus `GATE_LIMIT_BURST` (5) the gate
+answers 429. Successful sign-ins do not count.
+
+### Settings (proxy)
+
+| Setting               | Default | Meaning                                                                  |
+| --------------------- | ------- | ------------------------------------------------------------------------ |
+| `GATE_SSO_KEY_SYSTEM` | empty   | Key for tickets to `/system/`. Empty: no SSO, password only.             |
+| `GATE_SSO_KEY_CODE`   | empty   | Same for `/code/`. Its own key, so a monitoring ticket never opens code. |
+| `GATE_COOKIE_SECURE`  | empty   | Empty: `Secure` except in DEVMODE. TLS ends at the router in front.      |
+| `GATE_SESSION_MAX_S`  | 28800   | Absolute session lifetime (seconds).                                     |
+| `GATE_SESSION_IDLE_S` | 7200    | Session ends after this long without a request.                          |
+| `GATE_LIMIT_PER_MIN`  | 10      | Failed attempts per minute before 429.                                   |
+| `GATE_LIMIT_BURST`    | 5       | Extra failed attempts allowed at once.                                   |
+
+zCloud sets the two keys when it creates or deploys an instance. To switch SSO
+off again, set the key empty and `odoo reload && odoo up -d proxy`; the
+password keeps working. To rotate, set a new key the same way — tickets and
+sessions made with the old one stop working at once.
+
+### Ticket format (for whoever issues tickets)
+
+```
+ticket  = base64url(payload) "." base64url(HMAC-SHA256(key, base64url(payload)))
+payload = "1|<host>|<area>|<user id>|<iat>|<exp>|<jti>"
+```
+
+`<host>` is the instance's host name without port, `<area>` is `/system` or
+`/code`, `iat`/`exp` are Unix seconds (at most 300 s apart; the proxy allows
+30 s clock skew), `<jti>` is a random id of at least 16 characters. base64url
+without padding. The proxy remembers used ids until they expire.
+
+Every page the gate answers carries a header `X-Zodoo-Gate: 2` (`2; sso` when
+the area has a key). zCloud asks `GET <area>/__sso` before it sends a ticket;
+without the header it falls back to the old password form.
+
+### After updating zodoo
+
+The gate needs a rebuilt proxy image (`odoo reload && odoo build proxy && odoo
+up -d proxy`). Until then the proxy keeps the previous password gate, so an
+`odoo setup upgrade` alone breaks nothing. Cookies of the previous gate are no
+longer accepted; everybody signs in once more.
 
 ## The link bar
 
-At the top of both dashboards sits a link bar: **Overview | Logs**. It points
+At the top of both dashboards sits a link bar: **Overview | Logs | Abmelden**. It points
 at `/system` and `/logs`, i.e. at the proxy redirects above, so the overview
 always opens in kiosk mode.
 

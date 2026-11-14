@@ -71,6 +71,9 @@ def test_nav_links_bypass_grafana_router():
         for attrs in anchors:
             assert 'target="_self"' in attrs, f"{name}: {attrs}"
             href = re.search(r'href="([^"]+)"', attrs).group(1)
+            if href == "/system/__logout":
+                # answered by the gate itself (proxy/lua/dashauth.lua)
+                continue
             assert f"location = {href} " in conf, f"{name}: {href}"
 
 
@@ -85,7 +88,7 @@ def test_logs_list_reaches_back():
         v for v in data["templating"]["list"] if v["name"] == "proxylog"
     )
     assert proxylog["current"]["value"] == ".+_proxy"
-    (logs_panel,) = [p for p in data["panels"] if p["type"] == "logs"]
+    (logs_panel,) = (p for p in data["panels"] if p["type"] == "logs")
     target = logs_panel["targets"][0]
     assert target["maxLines"] == 5000
     assert 'container!~"$proxylog"' in target["expr"]
