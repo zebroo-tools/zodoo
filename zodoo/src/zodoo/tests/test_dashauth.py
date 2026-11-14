@@ -371,6 +371,14 @@ def test_ticket_in_url_refused(proxy):
     assert proxy.sso(t)[0] == 302
 
 
+def test_gate_header_tells_zcloud_about_sso(start_proxy, proxy):
+    _, hdr, _, _ = proxy.request("GET", "/system/__sso")
+    assert hdr["X-Zodoo-Gate"] == "2; sso"
+    p = start_proxy({"DEVMODE": "0", "DASHBOARD_PASSWORD": "pw"})
+    _, hdr, _, _ = p.request("GET", "/system/__sso")
+    assert hdr["X-Zodoo-Gate"] == "2"
+
+
 def test_ticket_for_other_host_header(proxy):
     st, *_ = proxy.request(
         "POST",

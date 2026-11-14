@@ -88,6 +88,10 @@ payload = "1|<host>|<area>|<user id>|<iat>|<exp>|<jti>"
 30 s clock skew), `<jti>` is a random id of at least 16 characters. base64url
 without padding. The proxy remembers used ids until they expire.
 
+Every page the gate answers carries a header `X-Zodoo-Gate: 2` (`2; sso` when
+the area has a key). zCloud asks `GET <area>/__sso` before it sends a ticket;
+without the header it falls back to the old password form.
+
 ### After updating zodoo
 
 The gate needs a rebuilt proxy image (`odoo reload && odoo build proxy && odoo

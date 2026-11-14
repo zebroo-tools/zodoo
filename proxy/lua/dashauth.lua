@@ -70,8 +70,16 @@ button:hover{background:#ff7a1a}
         .. [[</form></body></html>]]
 end
 
+-- Tells zCloud (a GET on <area>/__sso) that this proxy has the new gate and
+-- whether a ticket key is configured for the area; zCloud then sends a ticket
+-- instead of the old password form. Carries no secret.
+local gate_header
+
 local function respond(status, titel, msg, auth_path, cookies)
     ngx.status = status
+    if gate_header then
+        ngx.header["X-Zodoo-Gate"] = gate_header
+    end
     ngx.header.content_type = "text/html; charset=utf-8"
     ngx.header["Cache-Control"] = "no-store"
     if cookies then
@@ -215,6 +223,7 @@ function _M.gate(password, base_path, titel)
     if password == "" then
         password = nil
     end
+    gate_header = key and "2; sso" or "2"
 
     if not password and not key then
         if cfg.devmode then
