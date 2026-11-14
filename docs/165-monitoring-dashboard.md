@@ -42,7 +42,7 @@ with its own secrets. There are two ways in:
 - **Directly, with the password.** Without a session the gate shows the
   password page (`DASHBOARD_PASSWORD`, `CODING_PASSWORD`). On non-DEVMODE
   instances the password is generated automatically; `odoo status
-  --show-secrets` shows it.
+--show-secrets` shows it.
 
 Both lead to the same server-side session: cookie `zodoo_gate_system`
 (`zodoo_gate_code`), `Path=/system/` (`/code/`), `HttpOnly`, `SameSite=Lax`,
@@ -61,15 +61,15 @@ answers 429. Successful sign-ins do not count.
 
 ### Settings (proxy)
 
-| Setting               | Default | Meaning                                                                 |
-| --------------------- | ------- | ----------------------------------------------------------------------- |
-| `GATE_SSO_KEY_SYSTEM` | empty   | Key for tickets to `/system/`. Empty: no SSO, password only.            |
+| Setting               | Default | Meaning                                                                  |
+| --------------------- | ------- | ------------------------------------------------------------------------ |
+| `GATE_SSO_KEY_SYSTEM` | empty   | Key for tickets to `/system/`. Empty: no SSO, password only.             |
 | `GATE_SSO_KEY_CODE`   | empty   | Same for `/code/`. Its own key, so a monitoring ticket never opens code. |
 | `GATE_COOKIE_SECURE`  | empty   | Empty: `Secure` except in DEVMODE. TLS ends at the router in front.      |
-| `GATE_SESSION_MAX_S`  | 28800   | Absolute session lifetime (seconds).                                    |
-| `GATE_SESSION_IDLE_S` | 7200    | Session ends after this long without a request.                         |
-| `GATE_LIMIT_PER_MIN`  | 10      | Failed attempts per minute before 429.                                  |
-| `GATE_LIMIT_BURST`    | 5       | Extra failed attempts allowed at once.                                  |
+| `GATE_SESSION_MAX_S`  | 28800   | Absolute session lifetime (seconds).                                     |
+| `GATE_SESSION_IDLE_S` | 7200    | Session ends after this long without a request.                          |
+| `GATE_LIMIT_PER_MIN`  | 10      | Failed attempts per minute before 429.                                   |
+| `GATE_LIMIT_BURST`    | 5       | Extra failed attempts allowed at once.                                   |
 
 zCloud sets the two keys when it creates or deploys an instance. To switch SSO
 off again, set the key empty and `odoo reload && odoo up -d proxy`; the

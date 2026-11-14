@@ -45,8 +45,9 @@ def b64url(data):
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
 
 
-def make_ticket(key, aud=HOST, area="/system", sub="user-1", iat=None,
-                exp=None, jti=None):
+def make_ticket(
+    key, aud=HOST, area="/system", sub="user-1", iat=None, exp=None, jti=None
+):
     iat = int(time.time()) if iat is None else iat
     exp = iat + 60 if exp is None else exp
     jti = jti or secrets.token_hex(16)
@@ -67,7 +68,9 @@ def test_gatecore_spec():
     )
     out = subprocess.run(
         [LUA, str(SPEC), str(LUA_DIR), py_ticket],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout
     lines = out.splitlines()
     failed = [x for x in lines if not x.startswith("ok ")]
@@ -108,9 +111,15 @@ def _render_conf(tmp, legacy=False):
         if not (legacy and f.name == "gatecore.lua"):
             shutil.copy(f, lua / f.name)
     env_names = [
-        "DEVMODE", "DASHBOARD_PASSWORD", "CODING_PASSWORD",
-        "GATE_SSO_KEY_SYSTEM", "GATE_SSO_KEY_CODE", "GATE_COOKIE_SECURE",
-        "GATE_SESSION_MAX_S", "GATE_SESSION_IDLE_S", "GATE_LIMIT_PER_MIN",
+        "DEVMODE",
+        "DASHBOARD_PASSWORD",
+        "CODING_PASSWORD",
+        "GATE_SSO_KEY_SYSTEM",
+        "GATE_SSO_KEY_CODE",
+        "GATE_COOKIE_SECURE",
+        "GATE_SESSION_MAX_S",
+        "GATE_SESSION_IDLE_S",
+        "GATE_LIMIT_PER_MIN",
         "GATE_LIMIT_BURST",
     ]
     (tmp / "nginx.conf").write_text(
@@ -120,7 +129,9 @@ worker_processes 2;
 events { worker_connections 64; }
 http {
     lua_package_path "/test/lua/?.lua;;";
-    """ + ("" if legacy else "include gate.http.conf;") + """
+    """
+        + ("" if legacy else "include gate.http.conf;")
+        + """
     server {
         listen 8090;
         location / { default_type text/plain; return 200 "backend:$uri"; }
@@ -174,9 +185,10 @@ def _session_cookie(set_cookies, name):
 
 @pytest.fixture(scope="module")
 def start_proxy(tmp_path_factory):
-    if not DOCKER or subprocess.run(
-        [DOCKER, "info"], capture_output=True
-    ).returncode:
+    if (
+        not DOCKER
+        or subprocess.run([DOCKER, "info"], capture_output=True).returncode
+    ):
         pytest.skip("needs docker")
     started = []
 
@@ -185,21 +197,35 @@ def start_proxy(tmp_path_factory):
         _render_conf(tmp, legacy=legacy)
         name = f"zodoo-gate-test-{secrets.token_hex(4)}"
         cmd = [
-            DOCKER, "run", "-d", "--rm", "--name", name,
-            "-p", "127.0.0.1::80",
-            "-v", f"{tmp}:/test:ro",
+            DOCKER,
+            "run",
+            "-d",
+            "--rm",
+            "--name",
+            name,
+            "-p",
+            "127.0.0.1::80",
+            "-v",
+            f"{tmp}:/test:ro",
         ]
         for k, v in env.items():
             cmd += ["-e", f"{k}={v}"]
-        cmd += [IMAGE, "openresty", "-c", "/test/nginx.conf",
-                "-g", "daemon off;"]
+        cmd += [
+            IMAGE,
+            "openresty",
+            "-c",
+            "/test/nginx.conf",
+            "-g",
+            "daemon off;",
+        ]
         subprocess.run(cmd, check=True, capture_output=True)
         started.append(name)
         port = None
         for _ in range(50):
             out = subprocess.run(
                 [DOCKER, "port", name, "80/tcp"],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             ).stdout.strip()
             if out:
                 port = int(out.splitlines()[0].rsplit(":", 1)[1])
@@ -268,7 +294,8 @@ def test_valid_ticket_opens(proxy):
     for attr in ("Secure", "HttpOnly", "Path=/system/", "SameSite=Lax"):
         assert attr in raw, raw
     st, _, body, _ = proxy.request(
-        "GET", "/system/d/zodoo-overview/x",
+        "GET",
+        "/system/d/zodoo-overview/x",
         cookies={"zodoo_gate_system": sid},
     )
     assert st == 200 and body == "backend:/system/d/zodoo-overview/x"
@@ -301,7 +328,8 @@ def _tampered_payload():
     [
         pytest.param(
             lambda: make_ticket(
-                KEY_SYSTEM, iat=int(time.time()) - 200,
+                KEY_SYSTEM,
+                iat=int(time.time()) - 200,
                 exp=int(time.time()) - 100,
             ),
             id="expired",
@@ -345,7 +373,9 @@ def test_ticket_in_url_refused(proxy):
 
 def test_ticket_for_other_host_header(proxy):
     st, *_ = proxy.request(
-        "POST", "/system/__sso", {"ticket": make_ticket(KEY_SYSTEM)},
+        "POST",
+        "/system/__sso",
+        {"ticket": make_ticket(KEY_SYSTEM)},
         host="inst-b.example.com",
     )
     assert st == 401
@@ -355,7 +385,8 @@ def test_ticket_for_other_host_header(proxy):
 def test_code_cookie_does_not_open_system(proxy):
     ck = _login_sso(proxy, "/code", KEY_CODE)
     st, *_ = proxy.request(
-        "GET", "/system/api/x",
+        "GET",
+        "/system/api/x",
         cookies={"zodoo_gate_system": ck["zodoo_gate_code"]},
     )
     assert st == 401
@@ -445,9 +476,7 @@ def test_old_cookie_is_not_accepted(proxy):
 
 
 def _defaults(env):
-    return {
-        k: v for k, v in env.items() if not k.startswith("GATE_LIMIT_")
-    }
+    return {k: v for k, v in env.items() if not k.startswith("GATE_LIMIT_")}
 
 
 def test_rate_limit_password(start_proxy):
@@ -564,7 +593,9 @@ def test_shop_url_starting_with_system_reaches_odoo(proxy):
 
 def test_logout_link_in_dashboards():
     for name in ("zodoo-overview.json", "zodoo-logs.json"):
-        text = (REPO / "dashboard" / "grafana" / "dashboards" / name).read_text()
+        text = (
+            REPO / "dashboard" / "grafana" / "dashboards" / name
+        ).read_text()
         assert 'href=\\"/system/__logout\\" target=\\"_self\\"' in text, name
 
 
@@ -572,9 +603,10 @@ def test_proxy_image_ships_gate_files():
     dockerfile = (REPO / "proxy" / "Dockerfile").read_text()
     assert "lua/gatecore.lua" in dockerfile
     assert "gate.http.conf" in dockerfile
-    assert "include gate.http.conf;" in (
-        REPO / "proxy" / "nginx.conf"
-    ).read_text()
+    assert (
+        "include gate.http.conf;"
+        in (REPO / "proxy" / "nginx.conf").read_text()
+    )
 
 
 if os.environ.get("ZODOO_GATE_KEEP"):  # pragma: no cover - debugging aid

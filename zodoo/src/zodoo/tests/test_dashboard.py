@@ -88,7 +88,7 @@ def test_logs_list_reaches_back():
         v for v in data["templating"]["list"] if v["name"] == "proxylog"
     )
     assert proxylog["current"]["value"] == ".+_proxy"
-    (logs_panel,) = [p for p in data["panels"] if p["type"] == "logs"]
+    (logs_panel,) = (p for p in data["panels"] if p["type"] == "logs")
     target = logs_panel["targets"][0]
     assert target["maxLines"] == 5000
     assert 'container!~"$proxylog"' in target["expr"]

@@ -917,9 +917,9 @@ p.append(
         stacking="normal",
     )
 )
-p[-1]["description"] = (
-    "Drag a range here to zoom the log list below into that period."
-)
+p[-1][
+    "description"
+] = "Drag a range here to zoom the log list below into that period."
 y += 4
 p.append(
     logs(

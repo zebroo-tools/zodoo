@@ -54,14 +54,14 @@ Browser --> /code1/ --> [coding] openvscode-server (unprivileged user)
 - Only container with Docker socket access
 - Exposes predefined actions only:
 
-| Endpoint   | Method | Action                      |
-| ---------- | ------ | --------------------------- |
+| Endpoint   | Method | Action                                              |
+| ---------- | ------ | --------------------------------------------------- |
 | `/restart` | POST   | Put odoo back to normal (also ends a debug session) |
-| `/debug`   | POST   | Start odoo in debug mode    |
-| `/up`      | POST   | `docker compose up -d odoo` |
-| `/logs`    | POST   | Last 100 lines of odoo logs |
-| `/health`  | GET    | Health check                |
-| `/actions` | GET    | List available actions      |
+| `/debug`   | POST   | Start odoo in debug mode                            |
+| `/up`      | POST   | `docker compose up -d odoo`                         |
+| `/logs`    | POST   | Last 100 lines of odoo logs                         |
+| `/health`  | GET    | Health check                                        |
+| `/actions` | GET    | List available actions                              |
 
 ## Debugging
 
