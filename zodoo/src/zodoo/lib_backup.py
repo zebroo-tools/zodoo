@@ -521,7 +521,40 @@ def _after_restore(
     elif neutralize:
         # staging copy: only Odoo's official neutralization, passwords and
         # mail settings stay as they are
-        _run_odoo_neutralize(config, conn, db_host=db_host)
+        _run_odoo_neutralize(config, conn, db_host=db_host, required=True)
+
+
+def _after_restore_in_place(
+    ctx, conn, config, no_dev_scripts, no_remove_webassets, neutralize=False
+):
+    """
+    _after_restore for restores that write the database straight under its
+    final name (zodoo_bin unpacks the whole postgres volume). If the
+    neutralization fails there, the database is renamed to
+    <db>_not_neutralized, so the next `odoo up` cannot start on it.
+    """
+    try:
+        _after_restore(
+            ctx,
+            conn,
+            config,
+            no_dev_scripts,
+            no_remove_webassets,
+            neutralize=neutralize,
+        )
+    except (Exception, SystemExit):
+        if (config.devmode and not no_dev_scripts) or neutralize:
+            quarantine = f"{conn.dbname}_not_neutralized"
+            __rename_db_drop_target(
+                conn.clone(dbname="postgres"), conn.dbname, quarantine
+            )
+            click.secho(
+                f"Neutralization failed - the restored database was renamed "
+                f"to {quarantine} and is NOT neutralized.",
+                fg="red",
+                bold=True,
+            )
+        raise
 
 
 @restore.command(
@@ -647,7 +680,7 @@ def restore_db(
 
         _restore_zodoo_bin(ctx, config, filename_absolute, verify)
         conn = config.get_odoo_conn()
-        _after_restore(
+        _after_restore_in_place(
             ctx,
             conn,
             config,

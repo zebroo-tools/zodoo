@@ -109,6 +109,23 @@ def test_skipped_on_uninitialized_database(dcrun, monkeypatch):
     assert dcrun.calls == []
 
 
+@pytest.mark.parametrize("version", [11.0, 15.0])
+def test_required_aborts_before_odoo_16(dcrun, monkeypatch, version):
+    """restore --neutralize must not end with a copy that is not neutral."""
+    monkeypatch.setattr(odoo_config, "current_version", lambda: version)
+
+    with pytest.raises(SystemExit):
+        mod._run_odoo_neutralize(SimpleNamespace(), _conn(), required=True)
+    assert dcrun.calls == []
+
+
+def test_required_aborts_on_uninitialized_database(dcrun, monkeypatch):
+    monkeypatch.setattr(mod, "table_exists", lambda conn, table: False)
+
+    with pytest.raises(SystemExit):
+        mod._run_odoo_neutralize(SimpleNamespace(), _conn(), required=True)
+
+
 @pytest.fixture
 def after_restore(monkeypatch):
     calls = []
@@ -122,8 +139,8 @@ def after_restore(monkeypatch):
     monkeypatch.setattr(
         mod,
         "_run_odoo_neutralize",
-        lambda config, conn, db_host=None: calls.append(
-            ("neutralize", db_host)
+        lambda config, conn, db_host=None, required=False: calls.append(
+            ("neutralize", db_host, required)
         ),
     )
     monkeypatch.setattr(lib_backup, "remove_webassets", lambda conn: None)
@@ -147,7 +164,7 @@ def test_neutralize_option_without_devmode(after_restore):
         None, _conn(), config, False, False, neutralize=True, db_host="pg"
     )
 
-    assert after_restore == [("neutralize", "pg")]
+    assert after_restore == [("neutralize", "pg", True)]
 
 
 def test_plain_restore_without_devmode_stays_untouched(after_restore):
@@ -156,6 +173,54 @@ def test_plain_restore_without_devmode_stays_untouched(after_restore):
     lib_backup._after_restore(None, _conn(), config, False, False)
 
     assert after_restore == []
+
+
+class _Conn(SimpleNamespace):
+    def clone(self, **kwargs):
+        return _Conn(**{**self.__dict__, **kwargs})
+
+
+@pytest.fixture
+def in_place(monkeypatch):
+    renames = []
+
+    def failing_after_restore(*args, **kwargs):
+        raise SystemExit(1)
+
+    monkeypatch.setattr(lib_backup, "_after_restore", failing_after_restore)
+    monkeypatch.setattr(
+        lib_backup,
+        "__rename_db_drop_target",
+        lambda conn, from_db, to_db: renames.append((from_db, to_db)),
+    )
+    return renames
+
+
+@pytest.mark.parametrize("devmode, neutralize", [(True, False), (False, True)])
+def test_in_place_restore_quarantines_failed_neutralization(
+    in_place, devmode, neutralize
+):
+    """zodoo_bin writes the database under its final name: when the
+    neutralization fails, it must not stay there."""
+    config = SimpleNamespace(devmode=devmode)
+
+    with pytest.raises(SystemExit):
+        lib_backup._after_restore_in_place(
+            None, _Conn(dbname="odoo"), config, False, False, neutralize
+        )
+
+    assert in_place == [("odoo", "odoo_not_neutralized")]
+
+
+def test_in_place_restore_without_neutralization_keeps_name(in_place):
+    config = SimpleNamespace(devmode=False)
+
+    with pytest.raises(SystemExit):
+        lib_backup._after_restore_in_place(
+            None, _Conn(dbname="odoo"), config, False, False
+        )
+
+    assert in_place == []
 
 
 @pytest.mark.parametrize("version", ["16", "17", "18", "19", "20"])
