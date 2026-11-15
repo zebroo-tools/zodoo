@@ -41,6 +41,25 @@ def _has_odoo_cli() -> bool:
     return shutil.which("odoo") is not None
 
 
+def ci_project_name(base: str) -> str:
+    """Project name for an E2E test that is unique per CI job.
+
+    The self-hosted runners share one Docker daemon. With a fixed name two
+    jobs running at the same time use the same compose project, volumes and
+    network, and the teardown (``odoo down -v``) of the job that finishes
+    first deletes the postgres volume of the other one - which then fails
+    with ``relation "ir_config_parameter" does not exist``. Outside CI the
+    plain base name is kept.
+    """
+    run_id = os.environ.get("GITHUB_RUN_ID", "")
+    if not run_id:
+        return base
+    attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
+    # Short suffix: zodoo shortens long project names and the postgres
+    # socket below the job home is limited to 107 bytes.
+    return f"{base}r{run_id[-6:]}a{attempt}"
+
+
 @pytest.fixture(autouse=True)
 def _command_log_to_tmp(tmp_path_factory, monkeypatch):
     """Keep in-process `update`/`restart` runs from writing
@@ -234,7 +253,8 @@ def _session_home(tmp_path_factory):
     reliably work across all versions.
 
     Instead we now keep the real HOME and rely on each test using a
-    unique project name (``zodoo_pytest_19``, ``baketest19_0``, ...).
+    unique project name (``zodoo_pytest_19``, ``baketest190``, ...; in CI
+    with a per-job suffix, see ``ci_project_name``).
     Cleanup happens via ``odoo -p <project> down -v`` at session end.
     """
     yield Path.home()
@@ -250,7 +270,7 @@ def odoo_project_19(_session_home, tmp_path_factory, request):
     if not (_has_docker() and _has_odoo_cli()):
         pytest.skip("needs docker daemon and 'odoo' CLI on PATH")
 
-    name = "zodoo_pytest_19"
+    name = ci_project_name("zodoo_pytest_19")
     # Dir name must match project name — see test_bake.py comment for why.
     project_dir = tmp_path_factory.mktemp("pyt") / name
     project_dir.mkdir()
@@ -326,7 +346,7 @@ def pgbackrest_project(_session_home, tmp_path_factory):
     if not (_has_docker() and _has_odoo_cli()):
         pytest.skip("needs docker daemon and 'odoo' CLI on PATH")
 
-    name = "zodoo_pytest_pgbackrest"
+    name = ci_project_name("zodoo_pytest_pgbackrest")
     project_dir = tmp_path_factory.mktemp("pytpgbr") / name
     project_dir.mkdir()
     long_timeout = 60 * 30

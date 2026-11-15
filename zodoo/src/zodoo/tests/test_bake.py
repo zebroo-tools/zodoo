@@ -24,7 +24,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from .conftest import _run, requires_full_stack
+from .conftest import _run, ci_project_name, requires_full_stack
 
 DEFAULT_VERSIONS = os.environ.get("ZODOO_BAKE_TEST_VERSIONS", "19.0").split(",")
 
@@ -101,7 +101,7 @@ def isolated_home():
 @requires_full_stack
 @pytest.mark.parametrize("version", DEFAULT_VERSIONS)
 def test_bake_flow(version, isolated_home, tmp_path):
-    project_name = f"baketest{version.replace('.', '')}"
+    project_name = ci_project_name(f"baketest{version.replace('.', '')}")
     # The dir name must match project_name because `make_customs` runs an
     # internal `odoo reload` without `-p`, which derives the project name
     # from the current directory.

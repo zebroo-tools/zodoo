@@ -280,6 +280,9 @@ def _perform_install(
     # --since-git-sha: deprecated, kept for backwards compat
     # --installed-modules (-i): always update installed modules, skip SHA shortcut
     effective_sha = since_git_sha
+    # Set when the incremental (SHA) mode had to fall back to MANIFEST mode.
+    # The caller asked for "whatever is due", so nothing due is not an error.
+    sha_fallback = False
     if (
         not manifest_mode
         and not module
@@ -306,6 +309,7 @@ def _perform_install(
             effective_sha = None
             manifest_mode = True
             module = []
+            sha_fallback = True
         else:
             try:
                 module = _get_modules_since_git_sha(effective_sha)
@@ -321,6 +325,7 @@ def _perform_install(
                 effective_sha = None
                 manifest_mode = True
                 module = []
+                sha_fallback = True
 
         # Even if no modules changed by SHA, check if all manifest modules
         # are actually installed (e.g. after db reset only base is installed)
@@ -347,6 +352,13 @@ def _perform_install(
         module = _get_default_modules_to_update(
             config, manifest.get("uninstall", [])
         )
+        if not module and sha_fallback and not dangling_modules:
+            # Baked image (no .git) of a project whose MANIFEST installs
+            # nothing beyond base and has nothing outdated: the startup
+            # update has nothing to do. Raising "no modules to update" here
+            # made every pod start with UPDATE_ON_STARTUP=1 exit with 255.
+            click.secho("No module update required - exiting.")
+            return
 
     def _get_outdated_modules():
         from .module_tools import Modules, DBModules

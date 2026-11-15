@@ -1,0 +1,10 @@
+type: fix
+description: |
+  Startup-Update im gebackenen Image: Hat das Projekt nichts zu aktualisieren (kein .git im Image,
+  MANIFEST installiert nichts über base hinaus, nichts veraltet), endet `odoo update` jetzt mit
+  „No module update required" statt mit „no modules to update" und Exit 255. Betroffen waren Pods
+  bzw. Container mit UPDATE_ON_STARTUP=1. `odoo update -M` mit leerem MANIFEST bleibt ein Fehler.
+  Bake-Test: Die E2E-Tests nutzen in der CI je Job einen eigenen Projektnamen. Die beiden
+  Runner teilen sich einen Docker-Daemon; mit festem Namen hat das `odoo down -v` des einen Jobs
+  die Postgres-Volume des anderen gelöscht („relation ir_config_parameter does not exist").
+breaking: false
