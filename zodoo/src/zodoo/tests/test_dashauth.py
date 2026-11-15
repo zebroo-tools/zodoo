@@ -223,7 +223,17 @@ def start_proxy(tmp_path_factory):
             "-g",
             "daemon off;",
         ]
-        subprocess.run(cmd, check=True, capture_output=True)
+        # The matrix jobs share one Docker host; two of them can be handed
+        # the same free host port at once ("address already in use").
+        # Docker then picks another port on the next try.
+        for attempt in range(5):
+            res = subprocess.run(cmd, capture_output=True)
+            if res.returncode == 0:
+                break
+            if b"address already in use" not in res.stderr or attempt == 4:
+                pytest.fail(f"docker run failed: {res.stderr.decode()}")
+            subprocess.run([DOCKER, "rm", "-f", name], capture_output=True)
+            time.sleep(0.5)
         started.append(name)
         port = None
         for _ in range(50):
