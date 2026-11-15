@@ -101,7 +101,9 @@ def isolated_home():
 @requires_full_stack
 @pytest.mark.parametrize("version", DEFAULT_VERSIONS)
 def test_bake_flow(version, isolated_home, tmp_path):
-    project_name = ci_project_name(f"baketest{version.replace('.', '')}")
+    project_name = ci_project_name(
+        f"baketest{version.replace('.', '')}", f"bake{version.replace('.', '')}"
+    )
     # The dir name must match project_name because `make_customs` runs an
     # internal `odoo reload` without `-p`, which derives the project name
     # from the current directory.

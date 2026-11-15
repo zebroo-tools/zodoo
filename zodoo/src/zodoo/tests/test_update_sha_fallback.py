@@ -55,3 +55,17 @@ def test_explicit_manifest_mode_still_raises(tmp_path, monkeypatch):
     # automatic SHA fallback is relaxed.
     with pytest.raises(Exception, match="no modules to update"):
         _call(tmp_path, monkeypatch, manifest_mode=True)
+
+
+def test_ci_project_name(monkeypatch):
+    from .conftest import ci_project_name
+
+    monkeypatch.delenv("GITHUB_RUN_ID", raising=False)
+    assert ci_project_name("zodoo_pytest_pgbackrest", "zptpgbr") == (
+        "zodoo_pytest_pgbackrest"
+    )
+    monkeypatch.setenv("GITHUB_RUN_ID", "43773646509")
+    name = ci_project_name("zodoo_pytest_pgbackrest", "zptpgbr")
+    assert name == "zptpgbr46509"
+    # Socket path budget on the runners (see ci_project_name).
+    assert len(name) <= 23
