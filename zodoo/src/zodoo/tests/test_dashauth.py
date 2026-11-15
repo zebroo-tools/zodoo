@@ -195,6 +195,11 @@ def start_proxy(tmp_path_factory):
     def start(env, legacy=False):
         tmp = tmp_path_factory.mktemp("gate")
         _render_conf(tmp, legacy=legacy)
+        # mktemp gives 0700; the nginx workers run as "nobody" and must be
+        # able to read the Lua files (Docker Desktop on macOS hides this, a
+        # Linux runner does not -- there every request answered 500).
+        for path in [tmp, *tmp.rglob("*")]:
+            path.chmod(0o755 if path.is_dir() else 0o644)
         name = f"zodoo-gate-test-{secrets.token_hex(4)}"
         cmd = [
             DOCKER,
