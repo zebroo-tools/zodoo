@@ -2,18 +2,30 @@
 
 Settings are stored in plain `KEY=VALUE` text files. They are merged in this order (later overrides earlier):
 
-1. `~/.odoo/images/odoo/default.settings` (zodoo defaults, don't edit)
-2. `/etc/odoo/settings` (system-wide)
-3. `~/.odoo/settings` (user-wide)
-4. `./.odoo/settings` (project-specific, committed to your repo)
+1. `~/.odoo/images/**/default.settings` (zodoo defaults, don't edit)
+2. `<project>/settings`
+3. `/etc/odoo/settings` (system-wide)
+4. `/etc/odoo/<projectname>/settings`
+5. `<project>/.odoo/settings` (project-specific, can be committed to your repo)
+6. `~/.odoo/settings` (user-wide)
+7. `<project>/.odoo/run/settings`
+8. `~/.odoo/settings.<projectname>` (written by `odoo setting KEY=VALUE`)
+
+Environment variables do not override these files. They are only read inside
+a container that has no settings file (e.g. k8s deployments).
 
 Set settings via CLI:
 
 ```bash
-odoo setting <KEY> <VALUE>          # project-level (./.odoo/settings)
-odoo setting -u <KEY> <VALUE>       # user-level (~/.odoo/settings)
-odoo setting -s <KEY> <VALUE>       # system-level (/etc/odoo/settings)
+odoo setting <KEY>=<VALUE>          # project-level (~/.odoo/settings.<projectname>)
+odoo setting -u <KEY>=<VALUE>       # user-level (~/.odoo/settings)
+odoo setting -s <KEY>=<VALUE>       # system-level (/etc/odoo/settings)
+odoo setting <KEY>                  # read only
 ```
+
+The `=` is required: `odoo setting DEVMODE 1` only reads `DEVMODE` and `1`.
+The project settings hang on the project name, so renaming the folder loses
+them, and two checkouts with the same folder name share them.
 
 Or edit the files directly. Run `odoo reload` after manual edits.
 
@@ -42,7 +54,7 @@ Or edit the files directly. Run `odoo reload` after manual edits.
 
 | Setting                  | Default | Description                                                                                                                                                            |
 | ------------------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ODOO_LOG_LEVEL`         | empty   | Odoo log level: `debug`, `info`, `warn`, `error`, `critical`. Empty: `warn` on real instances, `info` with `DEVMODE=1`. `warning` is accepted and written as `warn`. |
+| `ODOO_LOG_LEVEL`         | empty   | Odoo log level: `debug`, `info`, `warn`, `error`, `critical`. Empty: `warn` on real instances, `info` with `DEVMODE=1`. `warning` is accepted and written as `warn`.   |
 | `ODOO_DEBUG_LOGLEVEL`    | `info`  | Log level inside the debug container.                                                                                                                                  |
 | `ODOO_MAX_CRON_THREADS`  | `2`     | Cron threads of the cronjobs role. Web server, queue jobs, update and debug keep the value from their own config file.                                                 |
 | `ODOO_WORKERS_WEB`       | `6`     | Number of Odoo web worker processes.                                                                                                                                   |

@@ -83,7 +83,10 @@ services (proxy, cronjobs, …) only print a warning with the traceback.
 
 ### `odoo setting <KEY>=<VALUE>`
 
-Set a project setting. Writes to `./.odoo/settings` and triggers reload.
+Set a project setting. Writes to `~/.odoo/settings.<projectname>` (the
+project name as shown by `odoo setup status`, not necessarily the folder name)
+and triggers reload. `-u` writes to `~/.odoo/settings`, `-s` to
+`/etc/odoo/settings`. Without the `=` the argument is only read.
 
 ```bash
 odoo setting DEVMODE=1
