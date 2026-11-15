@@ -14,11 +14,13 @@ odoo restart coding coding_trigger
 
 ## Access
 
-`/code/` is guarded by the same password gate as `/system` (see
-`proxy/lua/dashauth.lua`): one password, no user name, a signed cookie
-afterwards. The password is `CODING_PASSWORD`; it is generated on the first
-`odoo reload` of a real instance and left empty in DEVMODE, where the gate
-stays open. Read it with `odoo setting CODING_PASSWORD`.
+`/code/` is guarded by the same access gate as `/system/` (see
+`proxy/lua/dashauth.lua` and `docs/165-monitoring-dashboard.md`): zCloud opens
+it with a single-use ticket (key `GATE_SSO_KEY_CODE`, zCloud right `console`),
+a direct visit asks for `CODING_PASSWORD`. Either way a server-side session
+follows (8 h, 2 h idle, `/code/__logout` ends it). The password is generated
+on the first `odoo reload` of a real instance and left empty in DEVMODE, where
+the gate stays open. Read it with `odoo setting CODING_PASSWORD`.
 
 This matters because the editor has a terminal on the machine. An instance
 that can be reached from the internet must not serve it to everyone who knows
@@ -52,14 +54,14 @@ Browser --> /code1/ --> [coding] openvscode-server (unprivileged user)
 - Only container with Docker socket access
 - Exposes predefined actions only:
 
-| Endpoint   | Method | Action                      |
-| ---------- | ------ | --------------------------- |
+| Endpoint   | Method | Action                                              |
+| ---------- | ------ | --------------------------------------------------- |
 | `/restart` | POST   | Put odoo back to normal (also ends a debug session) |
-| `/debug`   | POST   | Start odoo in debug mode    |
-| `/up`      | POST   | `docker compose up -d odoo` |
-| `/logs`    | POST   | Last 100 lines of odoo logs |
-| `/health`  | GET    | Health check                |
-| `/actions` | GET    | List available actions      |
+| `/debug`   | POST   | Start odoo in debug mode                            |
+| `/up`      | POST   | `docker compose up -d odoo`                         |
+| `/logs`    | POST   | Last 100 lines of odoo logs                         |
+| `/health`  | GET    | Health check                                        |
+| `/actions` | GET    | List available actions                              |
 
 ## Debugging
 
