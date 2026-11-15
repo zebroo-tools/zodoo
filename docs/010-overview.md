@@ -60,11 +60,15 @@ zodoo repo (~/.odoo/images/)
 
 Settings are merged from multiple locations (later overrides earlier):
 
-1. `~/.odoo/images/odoo/default.settings` — zodoo defaults
+1. `~/.odoo/images/**/default.settings` — zodoo defaults
 2. `/etc/odoo/settings` — system-wide
-3. `~/.odoo/settings` — user-wide
-4. `./.odoo/settings` — project-specific (checked into your repo)
-5. Environment variables
+3. `./.odoo/settings` — project-specific (can be checked into your repo)
+4. `~/.odoo/settings` — user-wide
+5. `~/.odoo/settings.<projectname>` — written by `odoo setting KEY=VALUE`
+
+Environment variables only count inside a container without settings file.
+
+The complete list is in the [settings reference](./070-settings-reference.md).
 
 ## Containers (Services)
 

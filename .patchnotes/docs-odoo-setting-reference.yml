@@ -1,0 +1,8 @@
+type: docs
+description: |
+  Doku zu `odoo setting` korrigiert (Nacharbeit #254): Befehlsreferenz und Settings-Referenz
+  nennen jetzt das echte Schreibziel `~/.odoo/settings.<projektname>` statt `./.odoo/settings`,
+  die Beispiele nutzen durchgehend `KEY=VALUE` (ohne `=` wird nur gelesen), und die
+  Reihenfolge der Settings-Dateien entspricht `settings.py`. Umgebungsvariablen überschreiben
+  die Dateien nicht, sie gelten nur im Container ohne Settings-Datei.
+breaking: false
