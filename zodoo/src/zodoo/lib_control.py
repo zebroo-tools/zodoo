@@ -507,13 +507,12 @@ def attach(ctx, config, machine):
 def _start_build_accelerators(config):
     """Den apt- und den pypi-Zwischenspeicher hochfahren.
 
-    Beide sind reine Beschleuniger: ohne sie holt der Build die Pakete direkt
-    und ist nur langsamer. Ein Fehlschlag darf den Build deshalb NICHT
-    abbrechen - sonst haengt jeder Build an einer Bequemlichkeit.
-
-    Er darf aber auch nicht stumm bleiben. Vorher wurden die Aufgaben in einen
-    ThreadPool geworfen, ohne das Ergebnis je abzufragen: die Ausnahme blieb
-    im Future liegen und niemand erfuhr davon.
+    Ein Fehlschlag darf den Build NICHT hier abbrechen - der Start eines
+    Zwischenspeichers ist nicht der Build. Er darf aber auch nicht stumm
+    bleiben, und die Warnung muss stimmen: der apt-Proxy steht schon in der
+    buildsettings.env (`odoo reload`), apt-get geht also weiter auf ihn und
+    scheitert, solange er nicht laeuft. Nur der pypi-Cache ist ein reiner
+    Beschleuniger (extra-index-url, pip nimmt dann den Hauptindex).
     """
     from concurrent.futures import ThreadPoolExecutor
 
@@ -525,12 +524,27 @@ def _start_build_accelerators(config):
             name: pool.submit(fn, config) for name, fn in aufgaben.items()
         }
 
+    apt_proxy = getattr(config, "APT_PROXY_IP", None)
+    folgen = {
+        "apt cache": (
+            f"apt-get in the build still goes through APT_PROXY_IP="
+            f"{apt_proxy} and fails while the cache is down.\n"
+            "Repair the cache, or build without it: "
+            "odoo setting -s APT_PROXY_IP=ignore && odoo reload"
+        ),
+        "pypi cache": "Continuing without it - pip only gets slower.",
+    }
     for name, future in laeuft.items():
         fehler = future.exception()
         if fehler:
+            if isinstance(fehler, SystemExit):
+                # abort() has already printed the reason in red
+                grund = "see the error above"
+            else:
+                grund = str(fehler)
             click.secho(
-                f"WARNING: could not start the {name} ({fehler}).\n"
-                "Continuing without it - the build only gets slower.",
+                f"WARNING: could not start the {name} ({grund}).\n"
+                f"{folgen[name]}",
                 fg="yellow",
             )
 

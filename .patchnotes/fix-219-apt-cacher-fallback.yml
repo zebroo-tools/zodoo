@@ -1,0 +1,10 @@
+type: fix
+description: |
+  Warnung beim Ausfall des apt-Caches korrigiert (Nacharbeit #219). Startet der apt-Cache
+  vor dem Build nicht, hieß es bisher „Continuing without it – the build only gets slower“.
+  Das stimmt nicht: der Proxy steht schon in der buildsettings.env, apt-get geht weiter
+  auf ihn und der Build scheitert später an einer schwer deutbaren Stelle. Die Warnung sagt
+  das jetzt und nennt den Ausweg (`odoo setting -s APT_PROXY_IP=ignore && odoo reload`).
+  Statt „(1)“ steht bei einem Abbruch „see the error above“. Der pypi-Cache bleibt ein reiner
+  Beschleuniger.
+breaking: false
