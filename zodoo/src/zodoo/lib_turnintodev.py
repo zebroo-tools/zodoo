@@ -109,7 +109,7 @@ def neutralize(config):
             "Neutralizing makes the database unusable for production.\n"
             "Set DEVMODE=1 or run with -f: odoo -f dev-env neutralize"
         )
-    _run_odoo_neutralize(config, config.get_odoo_conn())
+    _run_odoo_neutralize(config, config.get_odoo_conn(), required=True)
 
 
 def __collect_other_turndb2dev_sql():
@@ -173,7 +173,7 @@ def _odoo_neutralize_cmd(config, dbname, db_host=None):
     return ["odoo", "/odoolib/entrypoint.sh", ODOO_NEUTRALIZE_SCRIPT]
 
 
-def _run_odoo_neutralize(config, conn, db_host=None):
+def _run_odoo_neutralize(config, conn, db_host=None, required=False):
     """
     Odoo's official neutralization (`odoo-bin neutralize -d <db>`, since
     16.0): runs the data/neutralize.sql of every installed module - base
@@ -183,16 +183,28 @@ def _run_odoo_neutralize(config, conn, db_host=None):
     Runs in a one-off odoo container. During a restore the database is still
     named <db>_restoring and lives on a helper postgres container, so dbname
     and host are passed explicitly.
+
+    required: the neutralization was asked for explicitly (restore
+    --neutralize, dev-env neutralize). Then a skip aborts instead of
+    leaving a copy that only looks neutralized. In DEVMODE turndb2dev.sql
+    follows and covers Odoo < 16, so there a skip is only a warning.
     """
     from .odoo_config import current_version
     from .tools import __dcrun
 
+    def skip(reason):
+        if required:
+            abort(
+                f"{reason} - the database {conn.dbname} is NOT neutralized.\n"
+                "Use DEVMODE=1 for a dev copy (turndb2dev.sql) instead."
+            )
+        click.secho(f"{reason} - skipped.", fg="yellow")
+
     if current_version() < 16.0:
-        click.secho(
-            "Odoo < 16.0 has no `odoo-bin neutralize` - skipped.", fg="yellow"
-        )
+        skip("Odoo < 16.0 has no `odoo-bin neutralize`")
         return
     if not table_exists(conn, "ir_module_module"):
+        skip("No Odoo database (table ir_module_module missing)")
         return
 
     dbname = conn.dbname

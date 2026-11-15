@@ -251,7 +251,13 @@ un-neutralized:
 passwords stay as they are.
 
 Before Odoo 16 there is no `odoo-bin neutralize`; there `turndb2dev.sql`
-disables the cronjobs itself.
+disables the cronjobs itself (DEVMODE). `--neutralize` without DEVMODE and
+`odoo dev-env neutralize` abort on Odoo < 16 instead of leaving a copy that
+only looks neutralized.
+
+If the neutralization fails during the restore of a `zodoo_bin` file (which
+unpacks the database straight under its final name), the database is renamed
+to `<db>_not_neutralized`, so the next `odoo up` cannot start on it.
 
 Existing projects need `odoo reload && odoo build odoo` once, so the odoo
 image contains `/odoolib/neutralize.py`; otherwise the restore aborts with
