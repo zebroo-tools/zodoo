@@ -29,6 +29,9 @@ APT_INSTALL_BLOCK = re.compile(
 
 
 def _zoneinfo_dockerfiles():
+    # an installed package has no repo around it - nothing to read then
+    if not CONFIG_DIR.is_dir():
+        return
     for version_dir in sorted(CONFIG_DIR.iterdir()):
         if not version_dir.name.isdigit():
             continue
@@ -52,6 +55,8 @@ def _runtime_apt_packages(dockerfile_text):
 
 def test_there_is_something_to_check():
     """Guard against the parametrization silently collecting nothing."""
+    if not CONFIG_DIR.is_dir():
+        pytest.skip(f"{CONFIG_DIR} not present (installed package)")
     assert list(_zoneinfo_dockerfiles())
 
 
