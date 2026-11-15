@@ -1887,7 +1887,9 @@ def test_a_broken_build_accelerator_only_warns():
 
     geht.gelaufen = False
 
-    with mock.patch.object(lib_control, "click") as fake_click, mock.patch.dict(
+    with mock.patch.object(
+        lib_control, "click"
+    ) as fake_click, mock.patch.dict(
         "sys.modules",
         {
             "zodoo.lib_cached_build": mock.Mock(
@@ -1903,11 +1905,46 @@ def test_a_broken_build_accelerator_only_warns():
     assert "docker build failed" in meldungen, "der Grund muss dastehen"
 
 
+def test_a_broken_apt_cache_says_the_build_will_fail():
+    """Der apt-Proxy steht schon in der buildsettings.env.
+
+    Faellt der Cache aus, geht apt-get trotzdem auf ihn und scheitert. Die
+    Warnung darf deshalb nicht "nur langsamer" versprechen, sondern muss den
+    Ausweg nennen.
+    """
+    from zodoo import lib_control
+
+    def kaputt(config):
+        raise SystemExit(1)
+
+    with mock.patch.object(
+        lib_control, "click"
+    ) as fake_click, mock.patch.dict(
+        "sys.modules",
+        {
+            "zodoo.lib_cached_build": mock.Mock(
+                start_squid_proxy=kaputt, start_proxpi=lambda c: None
+            )
+        },
+    ):
+        lib_control._start_build_accelerators(
+            mock.Mock(APT_PROXY_IP="10.0.0.1")
+        )
+
+    meldungen = " ".join(str(c) for c in fake_click.secho.call_args_list)
+    assert "only gets slower" not in meldungen
+    assert "APT_PROXY_IP=10.0.0.1" in meldungen
+    assert "APT_PROXY_IP=ignore" in meldungen
+    assert "see the error above" in meldungen, "statt nur (1)"
+
+
 def test_a_working_accelerator_says_nothing():
     """Im Normalfall keine Warnung - sonst gewoehnt sich niemand daran."""
     from zodoo import lib_control
 
-    with mock.patch.object(lib_control, "click") as fake_click, mock.patch.dict(
+    with mock.patch.object(
+        lib_control, "click"
+    ) as fake_click, mock.patch.dict(
         "sys.modules",
         {
             "zodoo.lib_cached_build": mock.Mock(
@@ -1931,7 +1968,7 @@ def test_the_apt_cacher_image_pins_its_package_sources():
     Ein Schnappschuss liefert Index und Pool aus demselben Moment.
     """
     pfad = Path(__file__).resolve().parents[4] / "apt_cacher" / "Dockerfile"
-    if not pfad.exists():                      # installiertes Paket, kein Repo
+    if not pfad.exists():  # installiertes Paket, kein Repo
         pytest.skip(f"{pfad} nicht vorhanden")
     text = pfad.read_text()
     assert "snapshot.debian.org" in text
@@ -1954,15 +1991,19 @@ def test_every_snippet_marker_has_a_file():
 
     wurzel = Path(__file__).resolve().parents[4]
     schnipsel_dir = wurzel / "common_snippets"
-    if not schnipsel_dir.exists():              # installiertes Paket, kein Repo
+    if not schnipsel_dir.exists():  # installiertes Paket, kein Repo
         pytest.skip(f"{schnipsel_dir} nicht vorhanden")
 
-    vorhanden = {p.name.upper() for p in schnipsel_dir.glob("*") if p.is_file()}
+    vorhanden = {
+        p.name.upper() for p in schnipsel_dir.glob("*") if p.is_file()
+    }
     fehlend = {}
     for dockerfile in wurzel.glob("**/Dockerfile*"):
         if ".git" in dockerfile.parts or "zodoo_src" in dockerfile.parts:
             continue
-        for name in re.findall(r"#___SNIPPET_(\w+)___", dockerfile.read_text()):
+        for name in re.findall(
+            r"#___SNIPPET_(\w+)___", dockerfile.read_text()
+        ):
             if name.upper() not in vorhanden:
                 fehlend.setdefault(name, []).append(
                     str(dockerfile.relative_to(wurzel))
@@ -2005,7 +2046,9 @@ def test_odoo_11_says_what_to_do_instead_of_writing_none():
 
     text = " ".join(str(c) for c in ausgabe.call_args_list)
     assert "ODOO_PYTHON_VERSION" in text, text
-    assert "None value not allowed" not in text, "die alte, nichtssagende Meldung"
+    assert (
+        "None value not allowed" not in text
+    ), "die alte, nichtssagende Meldung"
     assert "ODOO_PYTHON_VERSION" not in settings, "nichts Halbes schreiben"
 
 
