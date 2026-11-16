@@ -1,5 +1,5 @@
 --set critical
-update ir_cron set active=false;
+update ir_cron set active=false where id not in (select res_id from ir_model_data where model = 'ir.cron' and module = 'base' and name = 'autovacuum_job');
 delete from ir_config_parameter where key='webkit_path';
 /*if-table-exists ir_mail_server*/ update ir_mail_server set smtp_host='${TEST_MAIL_HOST}', smtp_user=null, smtp_pass=null, smtp_encryption='none', smtp_port=${TEST_MAIL_SMTP_PORT};
 /*if-column-exists fetchmail_server.is_ssl*/ update fetchmail_server set is_ssl=false;

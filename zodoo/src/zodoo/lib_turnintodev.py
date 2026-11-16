@@ -232,6 +232,46 @@ def _run_odoo_neutralize(config, conn, db_host=None, required=False):
         )
 
 
+DISABLE_AUTOVACUUM_SQL = (
+    "update ir_cron set active = false where id in ("
+    "select res_id from ir_model_data where model = 'ir.cron' "
+    "and module = 'base' and name = 'autovacuum_job')"
+)
+
+
+def _keep_gc_off_on_shared_filestore(config, conn):
+    """
+    A dev copy keeps the cron "Base: Auto-vacuum internal data" running (Odoo's
+    neutralize does so from 16 on, turndb2dev.sql up to 15), otherwise
+    bus_bus, sessions and the like grow without limit.
+
+    The same cron runs ir.attachment._gc_file_store(). That is only safe while
+    the database has a filestore directory of its own. If filestore/<db> (or
+    its checklist) is still a symlink into the shared pool - set up before the
+    pool switched to hardlinks - the checklist holds the markers of every
+    instance on the host, and one GC run deletes their attachments. In that
+    case the cron is switched off again until `odoo filestore unshare` has
+    migrated the directory.
+    """
+    from .lib_filestore import CHECKLIST_DIR, _filestore_dir
+
+    files_dir = _filestore_dir(config)
+    if not files_dir:
+        return
+    db_dir = files_dir / config.dbname
+    if not (db_dir.is_symlink() or (db_dir / CHECKLIST_DIR).is_symlink()):
+        return
+    _execute_sql(conn, DISABLE_AUTOVACUUM_SQL)
+    click.secho(
+        f"{db_dir} is a symlink into the shared filestore: the cron "
+        "'Base: Auto-vacuum internal data' stays OFF, its filestore GC would "
+        "delete the attachments of other instances. Run "
+        "`odoo filestore unshare` and switch the cron on again afterwards.",
+        fg="yellow",
+        bold=True,
+    )
+
+
 def __turn_into_devdb(ctx, config, conn, db_host=None):
     from .odoo_config import current_version
     from .myconfigparser import MyConfigParser
@@ -269,6 +309,8 @@ def __turn_into_devdb(ctx, config, conn, db_host=None):
             __execute_linebyline_sql(conn, sql, env)
         else:
             raise NotImplementedError(mode)
+
+    _keep_gc_off_on_shared_filestore(config, conn)
 
     _update_setting(
         conn=conn,
