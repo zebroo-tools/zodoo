@@ -2065,3 +2065,21 @@ def test_a_real_container_removal_error_is_still_reported(monkeypatch):
     erg = lp._probe(dict(UMGEBUNG), "kunde")
     assert "permission denied" in erg["cleanup_error"]
     assert "already in progress" not in erg["cleanup_error"]
+
+
+def test_the_fresh_volume_is_chowned_by_number_not_by_name(monkeypatch):
+    """16.11.2026: im Projektabbild ist die GID 999 schon systemd-journal.
+
+    `groupadd -g 999 pgbackrest || true` legt dort keine Gruppe an, der
+    Benutzer pgbackrest landet in systemd-journal - und `chown
+    pgbackrest.pgbackrest` brach die Probe mit "invalid user" ab. Die Kennung
+    999 ist die, auf die es ankommt (dieselbe wie die von postgres).
+    """
+    docker = FakeDocker()
+    _probe_bis_zum_restore(monkeypatch, docker)
+
+    lp._probe(dict(UMGEBUNG, run_user=None), "kunde")
+
+    chowns = [a for a in docker.aufrufe if "chown" in a]
+    assert chowns, docker.aufrufe
+    assert f"{lp.PGBR_UID}:{lp.PGBR_UID}" in chowns[0]
