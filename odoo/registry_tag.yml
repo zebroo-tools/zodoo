@@ -2,6 +2,7 @@
 generation: 5
 settings:
   - ODOO_PYTHON_VERSION
+  - ODOO_KEEP_LOCALES
 tag_prefix:
   - odoo_version
   - ODOO_PYTHON_VERSION
