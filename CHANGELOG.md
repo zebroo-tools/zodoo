@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.11.1
+
+- **Fix**: Dev-Restore bis Odoo 15: der Cron "Base: Auto-vacuum internal data" bleibt an. turndb2dev.sql (9.0, 11-15) hat bisher alle Crons abgeschaltet, auch diesen. Dann räumt niemand bus_bus, Sessions und Co. auf, die Tabellen wachsen ohne Grenze (auf einer CI-Maschine 44 GB bus_bus). Ab 16 lässt Odoos eigenes neutralize.sql den Cron schon an, jetzt verhalten sich die älteren Versionen genauso; alle übrigen Crons bleiben aus. Absicherung: ist filestore/<db> (oder dessen checklist) noch ein Symlink in den gemeinsamen Pool, schaltet der Restore den Cron wieder ab und warnt. Sein Filestore-GC würde dort die Dateien der anderen Instanzen löschen. Abhilfe: `odoo filestore unshare`, danach den Cron von Hand einschalten. Testhinweis: eine Odoo-15-Instanz mit DEVMODE=1 restaurieren, unter Einstellungen > Technisch > Geplante Aktionen muss "Base: Auto-vacuum internal data" aktiv sein, alle anderen inaktiv.
+
+
 ## 12.11.0
 
 - **Docs**: Doku zu `odoo setting` korrigiert (Nacharbeit #254): Befehlsreferenz und Settings-Referenz nennen jetzt das echte Schreibziel `~/.odoo/settings.<projektname>` statt `./.odoo/settings`, die Beispiele nutzen durchgehend `KEY=VALUE` (ohne `=` wird nur gelesen), und die Reihenfolge der Settings-Dateien entspricht `settings.py`. Umgebungsvariablen überschreiben die Dateien nicht, sie gelten nur im Container ohne Settings-Datei.
