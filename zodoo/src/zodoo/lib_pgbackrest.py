@@ -59,6 +59,7 @@ def _ensure_pgbackrest(config):
 
 
 CERT_DIR_IM_CONTAINER = "/etc/pgbackrest/cert"
+LOG_DIR_IM_CONTAINER = "/var/log/pgbackrest"
 PGBR_UID = "999"
 
 
@@ -83,12 +84,22 @@ def _richte_zertifikate(config):
     Deshalb wird es hier vor jedem Befehl gerichtet statt nur beim Start.
     Scheitert das, laeuft der Befehl trotzdem weiter: schlimmstenfalls
     erscheint dieselbe Meldung wie bisher.
+
+    The log directory (bind mount of $HOST_RUN_DIR/pgbackrest.logs) gets the
+    same treatment: a host-side chown cron handed it to the operating user on
+    cicd-3dm, and pgbackrest (uid 999) silently stopped writing its log files
+    ("unable to open log file ... Permission denied") for weeks while the
+    archive kept running.
     """
     pruefe = (
-        f"[ -d {CERT_DIR_IM_CONTAINER} ] || exit 0; "
-        f'[ "$(stat -c %u {CERT_DIR_IM_CONTAINER})" = "{PGBR_UID}" ] && exit 0; '
+        f"if [ -d {CERT_DIR_IM_CONTAINER} ] && "
+        f'[ "$(stat -c %u {CERT_DIR_IM_CONTAINER})" != "{PGBR_UID}" ]; then '
         f"chown -R {PGBR_UID}:{PGBR_UID} {CERT_DIR_IM_CONTAINER} && "
-        f"chmod 700 {CERT_DIR_IM_CONTAINER} && echo GERICHTET"
+        f"chmod 700 {CERT_DIR_IM_CONTAINER} && echo GERICHTET; fi; "
+        f"if [ -d {LOG_DIR_IM_CONTAINER} ] && "
+        f'[ -n "$(find {LOG_DIR_IM_CONTAINER} ! -user {PGBR_UID} -print -quit)" ]; then '
+        f"chown -R {PGBR_UID}:{PGBR_UID} {LOG_DIR_IM_CONTAINER} && "
+        f"echo LOGS_GERICHTET; fi; exit 0"
     )
     try:
         ergebnis = subprocess.run(
@@ -100,7 +111,14 @@ def _richte_zertifikate(config):
         )
     except (subprocess.SubprocessError, OSError):
         return
-    if "GERICHTET" in (ergebnis.stdout or ""):
+    zeilen = (ergebnis.stdout or "").split()
+    if "LOGS_GERICHTET" in zeilen:
+        click.secho(
+            "pgbackrest: the log directory no longer belonged to the "
+            "pgbackrest user and was handed back.",
+            fg="yellow",
+        )
+    if "GERICHTET" in zeilen:
         click.secho(
             "pgbackrest: der Zertifikatsordner gehoerte nicht mehr dem "
             "pgbackrest-Benutzer und wurde zurueckgegeben.",
@@ -1520,8 +1538,13 @@ def _verify_leftovers(jetzt):
     """
     try:
         out = _docker(
-            "volume", "ls", "-q", "--filter", "name=verify_",
-            check=False, timeout=120,
+            "volume",
+            "ls",
+            "-q",
+            "--filter",
+            "name=verify_",
+            check=False,
+            timeout=120,
         )
         namen = [
             n for n in (out.stdout or "").split() if n.startswith("verify_")
@@ -1529,8 +1552,13 @@ def _verify_leftovers(jetzt):
         if not namen:
             return []
         out = _docker(
-            "volume", "inspect", "-f", "{{.Name}} {{.CreatedAt}}", *namen,
-            check=False, timeout=120,
+            "volume",
+            "inspect",
+            "-f",
+            "{{.Name}} {{.CreatedAt}}",
+            *namen,
+            check=False,
+            timeout=120,
         )
     except Exception:  # noqa: BLE001 - die Probe selbst haengt nicht daran
         return []

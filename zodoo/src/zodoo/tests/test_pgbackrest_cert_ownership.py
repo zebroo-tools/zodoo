@@ -32,7 +32,9 @@ def aufgezeichnet(monkeypatch):
 
     _run.ausgabe = ""
     monkeypatch.setattr(modul.subprocess, "run", _run)
-    monkeypatch.setattr(modul, "__get_cmd", lambda config: ["docker", "compose"])
+    monkeypatch.setattr(
+        modul, "__get_cmd", lambda config: ["docker", "compose"]
+    )
     return aufrufe, _run
 
 
@@ -71,5 +73,37 @@ def test_ein_fehler_haelt_den_befehl_nicht_auf(monkeypatch):
         raise subprocess.SubprocessError("kein Container")
 
     monkeypatch.setattr(modul.subprocess, "run", _kaputt)
-    monkeypatch.setattr(modul, "__get_cmd", lambda config: ["docker", "compose"])
-    modul._richte_zertifikate(SimpleNamespace())   # darf nicht werfen
+    monkeypatch.setattr(
+        modul, "__get_cmd", lambda config: ["docker", "compose"]
+    )
+    modul._richte_zertifikate(SimpleNamespace())  # darf nicht werfen
+
+
+def test_richtet_auch_das_logverzeichnis(aufgezeichnet):
+    """A host-side chown cron took /var/log/pgbackrest away from uid 999 on
+    cicd-3dm; pgbackrest then wrote no log file at all."""
+    aufrufe, _run = aufgezeichnet
+    modul._richte_zertifikate(SimpleNamespace())
+
+    assert len(aufrufe) == 1
+    skript = aufrufe[0][-1]
+    assert "find /var/log/pgbackrest ! -user 999" in skript
+    assert "chown -R 999:999 /var/log/pgbackrest" in skript
+    # Never chmod the log dir: the host operator still has to read the logs.
+    assert "chmod 700 /var/log/pgbackrest" not in skript
+
+
+def test_meldet_logverzeichnis_getrennt(aufgezeichnet, capsys):
+    aufrufe, _run = aufgezeichnet
+    _run.ausgabe = "LOGS_GERICHTET\n"
+    modul._richte_zertifikate(SimpleNamespace())
+    out = capsys.readouterr().out
+    assert "log directory" in out
+    assert "Zertifikatsordner" not in out
+
+
+def test_skript_ist_gueltiges_sh(aufgezeichnet, tmp_path):
+    aufrufe, _run = aufgezeichnet
+    modul._richte_zertifikate(SimpleNamespace())
+    skript = aufrufe[0][-1]
+    assert subprocess.run(["sh", "-n", "-c", skript]).returncode == 0
