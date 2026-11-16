@@ -1,6 +1,0 @@
-type: internal
-description: |
-  Test test_odoo_tzdata (aus #253) überspringt sich, wenn kein Repo-Checkout da ist
-  (installiertes Paket), statt schon beim Einsammeln mit FileNotFoundError abzubrechen –
-  wie der Dockerfile-Test aus #219.
-breaking: false
