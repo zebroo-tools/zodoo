@@ -1624,7 +1624,11 @@ def _probe(umgebung, stanza):
             "chown",
             pgbr_image,
             "-R",
-            (run_user or "pgbackrest:pgbackrest").replace(":", "."),
+            # Numerisch, nicht "pgbackrest:pgbackrest": im Projektabbild ist
+            # die GID 999 schon von systemd-journal belegt, eine Gruppe
+            # pgbackrest gibt es dort nicht ("chown: invalid user"). Auf die
+            # Kennung kommt es ohnehin an - dieselbe wie die von postgres.
+            run_user or f"{PGBR_UID}:{PGBR_UID}",
             VERIFY_PGDATA,
             timeout=300,
         )
