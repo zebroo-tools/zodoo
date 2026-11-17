@@ -43,6 +43,58 @@ def _truthy(val):
     return str(val).strip().lower() in ("1", "true", "yes", "on")
 
 
+# Dateiendungen, die `odoo backup odoo-db` schreibt. Alles andere im Ordner
+# (Filestore-Kopien, .err-Protokolle, Marker) ist keine Datenbanksicherung.
+DUMP_ENDUNGEN = (".dump.gz", ".dump", ".sql.gz", ".sql", ".zip")
+
+# Inside the cronjobs container the dump folder is mounted here
+# (cronjobs/docker-compose.yml); DUMPS_PATH itself is the path on the host.
+DUMPS_IM_CONTAINER = "/host/dumps"
+
+
+def _dump_ordner(config):
+    from pathlib import Path
+
+    im_container = Path(DUMPS_IM_CONTAINER)
+    if im_container.is_dir():
+        return im_container
+    pfad = getattr(config, "dumps_path", "") or ""
+    return Path(pfad) if pfad else None
+
+
+def _dump_werte(config):
+    """(lesbar, neueste, anzahl) der Dump-Dateien im Sicherungsordner.
+
+    Viele Instanzen sichern nicht mit pgbackrest, sondern mit dem naechtlichen
+    `odoo backup odoo-db` (CRONJOB_BACKUP_DAILY). Ohne diese Zahlen stand ihre
+    Sicherung in der Ueberwachung als "aus", obwohl sie jede Nacht lief
+    (adoptierte Maschine, 16.11.2026).
+
+    Gezaehlt wird nur, was fertig ist: waehrend des Schreibens liegt der Dump
+    unter einem Namen mit fuehrendem Punkt und wird erst am Ende umbenannt.
+    Zeitpunkt ist das Aenderungsdatum der neuesten Datei -- also das Ende
+    der juengsten Sicherung.
+    """
+    ordner = _dump_ordner(config)
+    if ordner is None:
+        return False, None, 0
+    try:
+        dateien = [
+            d
+            for d in ordner.iterdir()
+            if d.is_file()
+            and not d.name.startswith(".")
+            and d.name.endswith(DUMP_ENDUNGEN)
+        ]
+    except OSError as fehler:
+        click.secho(f"Sicherungsordner nicht lesbar: {fehler}", fg="yellow")
+        return False, None, 0
+    if not dateien:
+        return True, None, 0
+    neueste = max(int(d.stat().st_mtime) for d in dateien)
+    return True, neueste, len(dateien)
+
+
 def _zeile(name, wert, labels=None):
     if labels:
         teile = ",".join(f'{k}="{v}"' for k, v in sorted(labels.items()))
@@ -204,31 +256,29 @@ def _check_zustand(config):
 def backup_metrics(config, stdout):
     pgbr_an = _truthy(getattr(config, "run_pgbackrest", "0"))
     offsite_an = _truthy(getattr(config, "run_offsite", "0"))
+    dump_an = bool((getattr(config, "cronjob_backup_daily", "") or "").strip())
 
     zeilen = [
         "# HELP zodoo_backup_enabled Ist diese Sicherungsart eingeschaltet.",
         "# TYPE zodoo_backup_enabled gauge",
         _zeile("zodoo_backup_enabled", int(pgbr_an), {"art": "pgbackrest"}),
         _zeile("zodoo_backup_enabled", int(offsite_an), {"art": "offsite"}),
+        _zeile("zodoo_backup_enabled", int(dump_an), {"art": "dump"}),
     ]
+    # Samples per metric family, written once at the end: the text format
+    # allows HELP/TYPE only once per family, and pgbackrest and dump both
+    # report a count and a last success.
+    abfragen = []
+    anzahlen = []
+    letzte = []
 
     if pgbr_an:
         erfolg, neueste, neueste_voll, anzahl = _pgbackrest_werte(config)
-        zeilen += [
-            "# HELP zodoo_backup_query_success Liess sich der Zustand lesen.",
-            "# TYPE zodoo_backup_query_success gauge",
-            _zeile(
-                "zodoo_backup_query_success",
-                int(erfolg),
-                {"art": "pgbackrest"},
-            ),
-        ]
+        abfragen.append(
+            _zeile("zodoo_backup_query_success", int(erfolg), {"art": "pgbackrest"})
+        )
         if erfolg:
-            zeilen += [
-                "# HELP zodoo_backup_count Anzahl der Sicherungen im Repository.",
-                "# TYPE zodoo_backup_count gauge",
-                _zeile("zodoo_backup_count", anzahl, {"art": "pgbackrest"}),
-            ]
+            anzahlen.append(_zeile("zodoo_backup_count", anzahl, {"art": "pgbackrest"}))
             # Fehlt eine Sicherung, wird die Zeile WEGGELASSEN statt auf 0
             # gesetzt. Eine 0 hiesse "1970 gesichert" und ergaebe ein
             # gigantisches Alter -- richtig gelesen, aber jeder Schwellenwert
@@ -236,16 +286,13 @@ def backup_metrics(config, stdout):
             # sie, faellt in PromQL `absent()` darauf an, und das ist die
             # ehrlichere Frage: es gibt gar keine.
             if neueste:
-                zeilen += [
-                    "# HELP zodoo_backup_last_success_timestamp_seconds "
-                    "Ende der juengsten Sicherung (Alter: time() - Wert).",
-                    "# TYPE zodoo_backup_last_success_timestamp_seconds gauge",
+                letzte.append(
                     _zeile(
                         "zodoo_backup_last_success_timestamp_seconds",
                         neueste,
                         {"art": "pgbackrest"},
-                    ),
-                ]
+                    )
+                )
             if neueste_voll:
                 zeilen += [
                     "# HELP zodoo_backup_last_full_timestamp_seconds "
@@ -336,6 +383,40 @@ def backup_metrics(config, stdout):
                         int(check["at"]),
                     ),
                 ]
+
+    if dump_an:
+        lesbar, neueste_dump, anzahl_dump = _dump_werte(config)
+        abfragen.append(
+            _zeile("zodoo_backup_query_success", int(lesbar), {"art": "dump"})
+        )
+        if lesbar:
+            anzahlen.append(_zeile("zodoo_backup_count", anzahl_dump, {"art": "dump"}))
+            # Keine Datei: Zeile weglassen statt 0 (siehe oben, pgbackrest).
+            if neueste_dump:
+                letzte.append(
+                    _zeile(
+                        "zodoo_backup_last_success_timestamp_seconds",
+                        neueste_dump,
+                        {"art": "dump"},
+                    )
+                )
+
+    if abfragen:
+        zeilen += [
+            "# HELP zodoo_backup_query_success Liess sich der Zustand lesen.",
+            "# TYPE zodoo_backup_query_success gauge",
+        ] + abfragen
+    if anzahlen:
+        zeilen += [
+            "# HELP zodoo_backup_count Anzahl der Sicherungen.",
+            "# TYPE zodoo_backup_count gauge",
+        ] + anzahlen
+    if letzte:
+        zeilen += [
+            "# HELP zodoo_backup_last_success_timestamp_seconds "
+            "Ende der juengsten Sicherung (Alter: time() - Wert).",
+            "# TYPE zodoo_backup_last_success_timestamp_seconds gauge",
+        ] + letzte
 
     zeilen += [
         "# HELP zodoo_backup_metrics_written_timestamp_seconds Wann diese "
