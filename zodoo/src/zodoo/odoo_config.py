@@ -234,7 +234,7 @@ class MANIFEST_CLASS:
         data[key] = value
         self._update(data)
 
-    def _update(self, d):
+    def _update(self, d, force=False):
         if "install" in d:
             d["install"] = list(sorted(set(d["install"])))
         # remove the system addons path again
@@ -267,6 +267,48 @@ class MANIFEST_CLASS:
                 f"This protects against accidental MANIFEST truncation."
             )
 
+        # Every MANIFEST() construction lands here (_apply_defaults sets the
+        # version), so without this check a plain read re-serialised the file:
+        # "install" got sorted, the layout became json.dumps. On a checkout
+        # that is updated with `git merge --ff-only` (zCloud autoupdate) that
+        # left a local change behind and blocked the next fast-forward. Only
+        # write when the content really changes; rewrite() forces a write.
+        if force or self._normalized(existing) != self._normalized(d):
+            self._write(d)
+
+        if len(set(d["addons_paths"])) != len(d["addons_paths"]):
+            duplicates = [
+                item
+                for item, count in Counter(d["addons_paths"]).items()
+                if count > 1
+            ]
+            abort(f"Addons Paths contains duplicate entries: {duplicates}")
+
+    @staticmethod
+    def _normalized(d):
+        """`d` with the normalisation _update applies, for comparing content.
+
+        Key order, the sort order of "install" and "15.0" vs 15.0 are layout,
+        not content.
+        """
+        d = dict(d)
+        if "install" in d:
+            d["install"] = sorted(set(d["install"]))
+        system_addons_paths = d.get("addons_paths_system", [])
+        if system_addons_paths:
+            d["addons_paths"] = [
+                p
+                for p in d.get("addons_paths", [])
+                if p not in system_addons_paths
+            ]
+        if "version" in d:
+            try:
+                d["version"] = float(d["version"])
+            except (TypeError, ValueError):
+                pass
+        return d
+
+    def _write(self, d):
         s = json.dumps(d, indent=4)
         fd, tmp = tempfile.mkstemp(suffix=".MANIFEST")
         try:
@@ -285,16 +327,9 @@ class MANIFEST_CLASS:
             Path(tmp).unlink(missing_ok=True)
             raise
 
-        if len(set(d["addons_paths"])) != len(d["addons_paths"]):
-            duplicates = [
-                item
-                for item, count in Counter(d["addons_paths"]).items()
-                if count > 1
-            ]
-            abort(f"Addons Paths contains duplicate entries: {duplicates}")
-
     def rewrite(self):
-        self._update(self._get_data())
+        """Write the MANIFEST in zodoo's layout, even if nothing changed."""
+        self._update(self._get_data(), force=True)
 
     @property
     def odoo_dir(self):

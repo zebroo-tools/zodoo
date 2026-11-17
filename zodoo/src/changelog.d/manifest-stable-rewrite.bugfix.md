@@ -1,0 +1,1 @@
+Reading the MANIFEST no longer rewrites it. zodoo writes the file only when its content changes, so `odoo reload` and `odoo update` leave a hand-written MANIFEST (order, layout) as it is and a checkout stays clean for `git merge --ff-only`.
