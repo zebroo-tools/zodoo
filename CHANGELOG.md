@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.11.2
+
+- **Fix**: Router (router_global): der Zertifikat-Erneuerungsjob im Image setzt jetzt PATH (inkl. /usr/sbin). Ohne die Zeile lief cron mit PATH=/usr/bin:/bin, certbots nginx-Plugin fand nginx nicht ('Could not find a usable nginx binary') und jeder Lauf schlug fehl. Prüfen: Router-Image neu bauen, 'docker run --rm --entrypoint cat <image> /etc/cron.d/certbot-renew' zeigt die PATH-Zeile; nach dem ersten Lauf steht in /var/log/letsencrypt/letsencrypt.log kein 'NoInstallationError' mehr.
+
+
 ## 12.11.1
 
 - **Fix**: Dev-Restore bis Odoo 15: der Cron "Base: Auto-vacuum internal data" bleibt an. turndb2dev.sql (9.0, 11-15) hat bisher alle Crons abgeschaltet, auch diesen. Dann räumt niemand bus_bus, Sessions und Co. auf, die Tabellen wachsen ohne Grenze (auf einer CI-Maschine 44 GB bus_bus). Ab 16 lässt Odoos eigenes neutralize.sql den Cron schon an, jetzt verhalten sich die älteren Versionen genauso; alle übrigen Crons bleiben aus. Absicherung: ist filestore/<db> (oder dessen checklist) noch ein Symlink in den gemeinsamen Pool, schaltet der Restore den Cron wieder ab und warnt. Sein Filestore-GC würde dort die Dateien der anderen Instanzen löschen. Abhilfe: `odoo filestore unshare`, danach den Cron von Hand einschalten. Testhinweis: eine Odoo-15-Instanz mit DEVMODE=1 restaurieren, unter Einstellungen > Technisch > Geplante Aktionen muss "Base: Auto-vacuum internal data" aktiv sein, alle anderen inaktiv.

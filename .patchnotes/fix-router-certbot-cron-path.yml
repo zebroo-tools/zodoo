@@ -1,3 +1,0 @@
-type: fix
-description: "Router (router_global): der Zertifikat-Erneuerungsjob im Image setzt jetzt PATH (inkl. /usr/sbin). Ohne die Zeile lief cron mit PATH=/usr/bin:/bin, certbots nginx-Plugin fand nginx nicht ('Could not find a usable nginx binary') und jeder Lauf schlug fehl. Prüfen: Router-Image neu bauen, 'docker run --rm --entrypoint cat <image> /etc/cron.d/certbot-renew' zeigt die PATH-Zeile; nach dem ersten Lauf steht in /var/log/letsencrypt/letsencrypt.log kein 'NoInstallationError' mehr."
-breaking: false
