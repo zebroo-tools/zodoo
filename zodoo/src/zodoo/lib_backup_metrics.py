@@ -27,6 +27,7 @@ leer. Eine Null hinzuschreiben waere schlimmer als die Luecke: sie saehe aus
 wie eine Messung.
 """
 
+import fnmatch
 import json
 import os
 import subprocess
@@ -45,7 +46,7 @@ def _truthy(val):
 
 # Dateiendungen, die `odoo backup odoo-db` schreibt. Alles andere im Ordner
 # (Filestore-Kopien, .err-Protokolle, Marker) ist keine Datenbanksicherung.
-DUMP_ENDUNGEN = (".dump.gz", ".dump", ".sql.gz", ".sql", ".zip")
+DUMP_ENDUNGEN = (".dump.gz", ".dump", ".sql.gz", ".sql", ".zip", ".tar.gz", ".tar")
 
 # Inside the cronjobs container the dump folder is mounted here
 # (cronjobs/docker-compose.yml); DUMPS_PATH itself is the path on the host.
@@ -60,6 +61,21 @@ def _dump_ordner(config):
         return im_container
     pfad = getattr(config, "dumps_path", "") or ""
     return Path(pfad) if pfad else None
+
+
+def _dump_muster(config):
+    """Dateimuster der eigenen Dumps (DB_ODOO_SEARCHFORMAT), oder None.
+
+    Der Dump-Ordner (Default ~/odoo_dumps) ist oft der aller Projekte eines
+    Benutzers. Ohne Muster zaehlte der frische Dump eines anderen Projekts
+    als eigene Sicherung und verdeckte, dass die eigene seit Tagen fehlt
+    (Review 17.11.2026). Dieselben Muster nutzen die Aufraeum-Jobs.
+    """
+    muster = str(getattr(config, "db_odoo_searchformat", "") or "").strip()
+    if not muster:
+        return None
+    projekt = str(getattr(config, "project_name", "") or "")
+    return muster.replace("{project_name}", projekt)
 
 
 def _dump_werte(config):
@@ -78,13 +94,18 @@ def _dump_werte(config):
     ordner = _dump_ordner(config)
     if ordner is None:
         return False, None, 0
+    muster = _dump_muster(config)
     try:
         dateien = [
             d
             for d in ordner.iterdir()
             if d.is_file()
             and not d.name.startswith(".")
-            and d.name.endswith(DUMP_ENDUNGEN)
+            and (
+                fnmatch.fnmatchcase(d.name, muster)
+                if muster
+                else d.name.endswith(DUMP_ENDUNGEN)
+            )
         ]
     except OSError as fehler:
         click.secho(f"Sicherungsordner nicht lesbar: {fehler}", fg="yellow")
@@ -256,7 +277,7 @@ def _check_zustand(config):
 def backup_metrics(config, stdout):
     pgbr_an = _truthy(getattr(config, "run_pgbackrest", "0"))
     offsite_an = _truthy(getattr(config, "run_offsite", "0"))
-    dump_an = bool((getattr(config, "cronjob_backup_daily", "") or "").strip())
+    dump_an = bool(str(getattr(config, "cronjob_backup_daily", "") or "").strip())
 
     zeilen = [
         "# HELP zodoo_backup_enabled Ist diese Sicherungsart eingeschaltet.",
