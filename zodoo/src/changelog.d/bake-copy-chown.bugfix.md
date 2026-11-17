@@ -1,0 +1,1 @@
+`odoo build` mit eingebautem Quellcode kopiert `/opt/src` direkt mit dem Besitzer `odoo` ins Image. Der zusätzliche Schritt `chown -R` / `chmod -R` fällt weg. Der Build ist dadurch deutlich schneller, und das Odoo-Image wird um die Größe des Quellcodes kleiner. Leserechte werden vorher im Build-Kontext gesetzt.

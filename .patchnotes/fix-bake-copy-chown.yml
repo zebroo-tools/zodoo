@@ -1,0 +1,3 @@
+type: fix
+description: "Odoo-Image: der Quellcode wird mit COPY --chown=odoo:odoo ins Image kopiert. Das separate RUN chown -R / chmod -R über /opt/src entfällt; es hat den ganzen Quellbaum ein zweites Mal in eine neue Schicht geschrieben und den Bake-Test auf dem Runner über 20 Minuten ohne Ausgabe hängen lassen."
+breaking: false
