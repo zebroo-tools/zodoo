@@ -2052,13 +2052,37 @@ def append_odoo_src(config, path):
     linkdir.parent.mkdir(parents=True, exist_ok=True)
     # Remove existing symlink or file if necessary
     sync_folder(config.HOST_CUSTOMS_DIR, linkdir, excludes=[".git"])
+    _make_world_readable(linkdir)
+    # Ownership is set by COPY itself. A separate `RUN chown -R` / `chmod -R`
+    # rewrites every file of the source tree into a new overlay layer: on a
+    # busy CI runner that took 16+ minutes without any output and doubled the
+    # size of the source layer. Read permissions are fixed in the build
+    # context above instead.
     content = f"""
 RUN mkdir -p /opt/src
-COPY ./src/{config.project_name} /opt/src
+COPY --chown=odoo:odoo ./src/{config.project_name} /opt/src
 RUN find /opt/src -name .git -type d -exec rm -rf {{}} \\;
-RUN chown -R odoo:odoo /opt/src && chmod -R a+r /opt/src
     """
     path.write_text(path.read_text() + "\n" + content)
+
+
+def _make_world_readable(root):
+    """Add read permission for everybody (and search permission on
+    directories) in the build context, so the copied source is readable
+    inside the image no matter which umask the checkout was made with.
+    Symlinks are left alone."""
+    root = Path(root)
+    for dirpath, dirnames, filenames in os.walk(root):
+        for name, wanted in [(x, 0o555) for x in dirnames] + [
+            (x, 0o444) for x in filenames
+        ]:
+            entry = Path(dirpath) / name
+            if entry.is_symlink():
+                continue
+            mode = entry.stat().st_mode
+            if mode & wanted != wanted:
+                entry.chmod(mode | wanted)
+    root.chmod(root.stat().st_mode | 0o555)
 
 
 def _complete_setting_name(ctx, param, incomplete):

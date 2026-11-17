@@ -1,0 +1,3 @@
+type: fix
+description: "MANIFEST is only written when its content changes. Before, every zodoo command that read the MANIFEST rewrote it (sorted install list, JSON layout), which left a local change behind and blocked `git merge --ff-only` updates such as the zCloud autoupdate. `odoo src rewrite-manifest` / `pretty-print-manifest` still reformat on purpose."
+breaking: false
