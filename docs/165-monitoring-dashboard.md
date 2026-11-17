@@ -143,8 +143,10 @@ is by far the loudest stream and would use up the 5000 lines within seconds.
 Switch it to `shown` when you need the requests themselves.
 
 How far back data exists at all is `DASHBOARD_LOKI_RETENTION`. Queries may span
-the whole retention (`max_query_length` follows it), so "This year" no longer
-fails with "query time range exceeds the limit".
+the whole retention (`max_query_length` follows it). A longer range such as
+"This year" or "Last 5 years" is cut at the retention (`max_query_lookback`
+follows it as well) instead of failing with "query time range exceeds the
+limit".
 
 Odoo's access log lines (`werkzeug`) follow `ODOO_LOG_LEVEL` as well. The
 `config_webserver` templates set `werkzeug:DEBUG`, and odoo-bin appends
