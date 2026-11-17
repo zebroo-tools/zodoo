@@ -25,11 +25,13 @@ RUN chmod a+x /run.sh /usr/local/bin/sync_traefik_certs.py
 
 # Twice a day, as Let's Encrypt recommends: certbot only acts on certificates
 # inside its 30-day window, so most runs do nothing. The old '@monthly' left no
-# room for one failed attempt (cloud.zebroo.de expired on 2026-10-29). Absolute
-# path because cron runs jobs with PATH=/usr/bin:/bin and pip puts certbot into
-# /usr/local/bin. Output goes to the container log (docker logs), the details
-# stay in /var/log/letsencrypt.
-RUN printf 'SHELL=/bin/sh\n17 3,15 * * * root /usr/local/bin/certbot renew --quiet >/proc/1/fd/1 2>&1\n' >/etc/cron.d/certbot-renew \
+# room for one failed attempt (cloud.zebroo.de expired on 2026-10-29). cron runs
+# jobs with PATH=/usr/bin:/bin: pip puts certbot into /usr/local/bin (hence the
+# absolute path) and nginx lives in /usr/sbin, which the nginx plugin looks up
+# via PATH ("Could not find a usable 'nginx' binary", every run failed until the
+# PATH line was added). Output goes to the container log (docker logs), the
+# details stay in /var/log/letsencrypt.
+RUN printf 'SHELL=/bin/sh\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n17 3,15 * * * root /usr/local/bin/certbot renew --quiet >/proc/1/fd/1 2>&1\n' >/etc/cron.d/certbot-renew \
     && chmod 0644 /etc/cron.d/certbot-renew
 
 CMD ./run.sh
