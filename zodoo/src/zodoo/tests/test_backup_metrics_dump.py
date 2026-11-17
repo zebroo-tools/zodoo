@@ -16,6 +16,7 @@ class FakeConfig:
     run_pgbackrest = "0"
     run_offsite = "0"
     cronjob_backup_daily = "0 0 * * * odoo backup odoo-db x.dump.gz"
+    db_odoo_searchformat = "{project_name}.odoo.*.dump.gz"
     dirs = {}
 
     def __init__(self, dumps_path):
@@ -89,3 +90,54 @@ def test_each_family_has_one_help_line(tmp_path, capsys, monkeypatch):
         "zodoo_backup_last_success_timestamp_seconds",
     ):
         assert out.count(f"# HELP {familie} ") == 1, familie
+
+
+def test_dump_of_another_project_does_not_count(tmp_path, capsys, monkeypatch):
+    # ~/odoo_dumps is shared by every project of a user: a fresh dump of
+    # another project must not hide that this one is missing.
+    dumps = tmp_path / "dumps"
+    dumps.mkdir()
+    _datei(dumps, "kunde.odoo.20261110000000.dump.gz", 1794300000)
+    _datei(dumps, "nachbar.odoo.20261116000000.dump.gz", 1794790000)
+    out = _ausgabe(FakeConfig(dumps), capsys, monkeypatch, tmp_path)
+    assert 'zodoo_backup_count{art="dump"} 1' in out
+    assert 'zodoo_backup_last_success_timestamp_seconds{art="dump"} 1794300000' in out
+
+
+def test_without_search_pattern_suffixes_decide(tmp_path, capsys, monkeypatch):
+    dumps = tmp_path / "dumps"
+    dumps.mkdir()
+    _datei(dumps, "irgendwas.tar.gz", 1794790000)
+    _datei(dumps, "notiz.txt", 1794800000)
+    config = FakeConfig(dumps)
+    config.db_odoo_searchformat = ""
+    out = _ausgabe(config, capsys, monkeypatch, tmp_path)
+    assert 'zodoo_backup_count{art="dump"} 1' in out
+
+
+def test_pgbackrest_and_dump_together_are_valid(tmp_path, capsys, monkeypatch):
+    dumps = tmp_path / "dumps"
+    dumps.mkdir()
+    _datei(dumps, "kunde.odoo.20261116000000.dump.gz", 1794790000)
+    config = FakeConfig(dumps)
+    config.run_pgbackrest = "1"
+    config.pgbr_stanza = "kunde"
+    monkeypatch.setattr(bm, "_pgbackrest_werte", lambda c: (True, 1794795000, 1794700000, 4))
+    monkeypatch.setattr(bm, "_archiv_werte", lambda c: None)
+    monkeypatch.setattr(bm, "_spool_and_dropped", lambda c: (None, None))
+    monkeypatch.setattr(bm, "_check_zustand", lambda c: None)
+    out = _ausgabe(config, capsys, monkeypatch, tmp_path)
+    for familie in (
+        "zodoo_backup_enabled",
+        "zodoo_backup_query_success",
+        "zodoo_backup_count",
+        "zodoo_backup_last_success_timestamp_seconds",
+    ):
+        assert out.count(f"# HELP {familie} ") == 1, familie
+        # all samples of a family directly after its TYPE line
+        zeilen = out.splitlines()
+        start = zeilen.index(next(z for z in zeilen if z.startswith(f"# TYPE {familie} ")))
+        proben = [i for i, z in enumerate(zeilen) if z.startswith(familie + "{") or z.startswith(familie + " ")]
+        assert proben == list(range(start + 1, start + 1 + len(proben))), familie
+    assert 'zodoo_backup_last_success_timestamp_seconds{art="pgbackrest"} 1794795000' in out
+    assert 'zodoo_backup_last_success_timestamp_seconds{art="dump"} 1794790000' in out
