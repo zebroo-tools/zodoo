@@ -221,3 +221,49 @@ def test_addons_paths_system_still_gets_prepended(monkeypatch):
         "{'addons_paths': ['b'], 'addons_paths_system': ['a']}"
     )
     assert _manifest(path)._get_data()["addons_paths"] == ["a", "b"]
+
+
+# --------------------------------------------------------------------------
+# MANIFEST writes only on a real content change. Every MANIFEST() construction
+# sets the version through __setitem__; that used to re-serialise the file on
+# each read (sorted "install", json layout) and left a local change in
+# checkouts that are updated with `git merge --ff-only`.
+# --------------------------------------------------------------------------
+
+_HAND_WRITTEN = (
+    "{\n"
+    "    'version': '15.0',\n"
+    "    'install': ['web', 'queue_job'],\n"
+    "    'addons_paths': ['odoo/addons'],\n"
+    "}\n"
+)
+
+
+def _real_manifest(tmp_path, monkeypatch, content=_HAND_WRITTEN):
+    path = tmp_path / "MANIFEST"
+    path.write_text(content)
+    monkeypatch.setattr(mod, "MANIFEST_FILE", lambda: path)
+    return _manifest(path), path
+
+
+def test_setting_an_equal_value_leaves_the_file_untouched(
+    tmp_path, monkeypatch
+):
+    manifest, path = _real_manifest(tmp_path, monkeypatch)
+    manifest["version"] = 15.0  # what _apply_defaults does on every read
+    manifest["install"] = ["queue_job", "web"]  # same set, other order
+    assert path.read_text() == _HAND_WRITTEN
+
+
+def test_a_real_change_is_written(tmp_path, monkeypatch):
+    manifest, path = _real_manifest(tmp_path, monkeypatch)
+    manifest["install"] = ["web", "queue_job", "sale"]
+    assert manifest._get_data()["install"] == ["queue_job", "sale", "web"]
+    assert path.read_text() != _HAND_WRITTEN
+
+
+def test_rewrite_still_reformats(tmp_path, monkeypatch):
+    manifest, path = _real_manifest(tmp_path, monkeypatch)
+    manifest.rewrite()
+    assert path.read_text().startswith('{\n    "version": "15.0"')
+    assert manifest._get_data()["install"] == ["queue_job", "web"]
