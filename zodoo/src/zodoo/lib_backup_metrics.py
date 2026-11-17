@@ -70,6 +70,12 @@ def _dump_muster(config):
     Benutzers. Ohne Muster zaehlte der frische Dump eines anderen Projekts
     als eigene Sicherung und verdeckte, dass die eigene seit Tagen fehlt
     (Review 17.11.2026). Dieselben Muster nutzen die Aufraeum-Jobs.
+
+    The pattern must match DB_ODOO_FILEFORMAT: whoever changes the file
+    name there has to change DB_ODOO_SEARCHFORMAT too, otherwise no dump
+    is found and the state shows "none". Only {project_name} is replaced
+    here; other placeholders ({customs}, $VAR) are not supported.
+    Dumps of type "directory" (a folder instead of a file) are not counted.
     """
     muster = str(getattr(config, "db_odoo_searchformat", "") or "").strip()
     if not muster:
