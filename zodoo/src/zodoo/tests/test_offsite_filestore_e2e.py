@@ -9,7 +9,7 @@ So: run against a real project, with a throwaway receiver on the host standing
 in for the backup server, and assert on the manifests that arrive:
 
     run 1  -> N files in one bundle
-    run 2  -> nothing new, no new object at all
+    run 2  -> nothing new: no new object, only a manifest line without bundle
     run 3  -> exactly the one file added in between
 
 The bundle from run 3 is then decrypted (inside the container, which is the only
@@ -32,7 +32,6 @@ import pytest
 import yaml
 
 from .conftest import requires_full_stack
-
 
 
 class _Receiver(BaseHTTPRequestHandler):
@@ -76,6 +75,14 @@ class _Receiver(BaseHTTPRequestHandler):
             self.manifests.append(json.loads(body))
 
         self.send_response(201)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def do_POST(self):
+        # The real receiver appends one manifest line per POST (JSON Lines).
+        length = int(self.headers.get("Content-Length", "0"))
+        self.manifests.append(json.loads(self.rfile.read(length)))
+        self.send_response(204)
         self.send_header("Content-Length", "0")
         self.end_headers()
 
@@ -149,7 +156,9 @@ def _filestore_dir(project) -> Path:
     return candidates[0]
 
 
-def _decrypt_listing(project, private, bundle: bytes, tmp_path: Path) -> list[str]:
+def _decrypt_listing(
+    project, private, bundle: bytes, tmp_path: Path
+) -> list[str]:
     """Decrypt a bundle inside the offsite container and list its members.
 
     The container is the one place that has `age` and `tar`, and using it also
@@ -235,7 +244,11 @@ def test_filestore_uploads_only_the_delta(
     project.run("setting", "OFFSITE_FORCE_IN_DEVMODE=1", timeout=60)
     project.run("setting", f"OFFSITE_WO_URL={url}", timeout=60)
     project.run("setting", "OFFSITE_REST_USER=e2etest", timeout=60)
-    project.run("setting", "OFFSITE_REST_PASSWORD=irrelevant-for-the-double", timeout=60)
+    project.run(
+        "setting",
+        "OFFSITE_REST_PASSWORD=irrelevant-for-the-double",
+        timeout=60,
+    )
     project.run("reload", timeout=60 * 10)
     project.run("build", "offsite", timeout=60 * 20)
 
@@ -260,10 +273,17 @@ def test_filestore_uploads_only_the_delta(
         == first["sha256"]
     )
 
-    # --- run 2: nothing changed -> nothing may be uploaded ---------------
+    # --- run 2: nothing changed -> no object, but the run declares itself -
+    # The backup server measures the age of the newest manifest; without this
+    # line a quiet instance would look like a stopped job.
     project.run("offsite", "filestore", timeout=60 * 10)
-    assert len(_Receiver.manifests) == 1, "a run with no new files uploaded something"
-    assert len(_Receiver.objects) == 1
+    assert (
+        len(_Receiver.objects) == 1
+    ), "a run with no new files uploaded something"
+    assert len(_Receiver.manifests) == 2, _Receiver.manifests
+    beat = _Receiver.manifests[1]
+    assert beat["files_added"] == 0
+    assert "bundle" not in beat
 
     # --- run 3: exactly one new file -------------------------------------
     # Written the way Odoo writes attachments: the name IS the sha1 of the
@@ -275,8 +295,8 @@ def test_filestore_uploads_only_the_delta(
     target.write_bytes(content)
 
     project.run("offsite", "filestore", timeout=60 * 10)
-    assert len(_Receiver.manifests) == 2, "the new file was not picked up"
-    second = _Receiver.manifests[1]
+    assert len(_Receiver.manifests) == 3, "the new file was not picked up"
+    second = _Receiver.manifests[2]
     assert second["files_added"] == 1, second
     assert second["files_total"] == first["files_total"] + 1
     assert second["bundle"] != first["bundle"]

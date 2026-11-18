@@ -69,6 +69,25 @@ looks like."
     echo "$root"
 }
 
+# A manifest line for a run that uploaded nothing, because nothing was new.
+#
+# Without it, a quiet instance (no new attachments for weeks) looks exactly
+# like one whose job stopped: the newest manifest on the receiver ages either
+# way, and the "no backup for 48 h" alarm on the backup server cannot tell the
+# two apart. So every successful run declares itself, and the age of the
+# newest manifest means "time since the last successful run".
+#
+# No "bundle" key: there is no object to check, and wo-check only verifies
+# entries that name one. files_total is the current number of files, as
+# in every other line.
+wo_filestore_heartbeat() {
+    local base="$1" run_id="$2" total="$3"
+    local ledger_sum
+    ledger_sum=$(LC_ALL=C sort -u "$LEDGER" | sha256sum | cut -d' ' -f1)
+    wo_append_manifest "$base" "$(date -u +%Y%m%d)-filestore.jsonl" \
+        "{\"run\": \"$run_id\", \"kind\": \"filestore\", \"host\": \"${PROJECT_NAME:-zodoo}\", \"database\": \"${DBNAME:-}\", \"files_added\": 0, \"files_total\": $total, \"ledger_sha256\": \"$ledger_sum\"}"
+}
+
 do_filestore() {
     wo_require
     local root
@@ -99,6 +118,7 @@ do_filestore() {
 
     if [ "$added" -eq 0 ]; then
         echo "offsite/filestore: nothing new ($total files already uploaded)."
+        wo_filestore_heartbeat "$base" "$run_id" "$total" || return 1
         return 0
     fi
 
@@ -122,6 +142,7 @@ do_filestore() {
         # the run that actually uploaded them.
         cat "$work/new" >> "$LEDGER"
         echo "offsite/filestore: $name was already present, ledger updated."
+        wo_filestore_heartbeat "$base" "$run_id" "$total" || return 1
         return 0
     fi
     sum=$(echo "$res" | cut -d' ' -f2)
