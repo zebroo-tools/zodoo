@@ -174,3 +174,21 @@ def test_empty_filestore_is_not_a_successful_run(setup):
     res = _run(setup)
     assert res.returncode == 7, (res.stdout, res.stderr)
     assert _manifests(setup) == []
+
+
+def test_empty_filestore_is_allowed_when_switched_off(setup):
+    # Same escape hatch as the restic path: an instance without attachments.
+    (setup / "filestore" / "ab" / "abcdef").unlink()
+    res = _run(setup, OFFSITE_ALLOW_WITHOUT_FILES="1")
+    assert res.returncode == 0, (res.stdout, res.stderr)
+    lines = _manifests(setup)
+    assert len(lines) == 1 and lines[0]["files_total"] == 0
+    assert "bundle" not in lines[0]
+
+
+def test_unwritable_ledger_fails_the_run(setup):
+    (
+        setup / "state" / "filestore.ledger"
+    ).mkdir()  # a directory: cannot append
+    res = _run(setup)
+    assert res.returncode == 7, (res.stdout, res.stderr)

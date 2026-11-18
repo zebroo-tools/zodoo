@@ -91,7 +91,9 @@ wo_filestore_heartbeat() {
 do_filestore() {
     wo_require
     local root
-    root=$(wo_filestore_root)
+    # Every step checks its own result: do_backup calls this function as
+    # `do_filestore || ...`, and set -e does not apply there.
+    root=$(wo_filestore_root) || return 1
 
     WO_CACERT=()
     [ -f "$CA_CERT" ] && WO_CACERT=(--cacert "$CA_CERT")
@@ -100,17 +102,18 @@ do_filestore() {
     local run_id
     run_id=$(date -u +%Y%m%dT%H%M%SZ)
     local work
-    work=$(wo_workdir)
+    work=$(wo_workdir) || return 1
     # shellcheck disable=SC2064  # expand $work now, not at trap time
     trap "rm -rf '$work'" EXIT
 
-    touch "$LEDGER"
+    touch "$LEDGER" || return 1
 
     # Paths relative to the filestore root, so the bundle can be unpacked
     # straight into a restored filestore.
-    find "$root" -type f -printf '%P\n' | LC_ALL=C sort > "$work/current"
-    LC_ALL=C sort -u "$LEDGER" > "$work/known"
-    LC_ALL=C comm -23 "$work/current" "$work/known" > "$work/new"
+    find "$root" -type f -printf '%P\n' | LC_ALL=C sort > "$work/current" \
+        || return 1
+    LC_ALL=C sort -u "$LEDGER" > "$work/known" || return 1
+    LC_ALL=C comm -23 "$work/current" "$work/known" > "$work/new" || return 1
 
     local total added
     total=$(wc -l < "$work/current")
@@ -118,9 +121,12 @@ do_filestore() {
 
     # An empty filestore is what an unmounted volume looks like (see
     # wo_filestore_root). Declaring that as a successful run would silence
-    # the alarm for exactly the case it exists for.
-    if [ "$total" -eq 0 ]; then
-        echo "offsite/filestore: the filestore is empty - not declaring a run." >&2
+    # the alarm for exactly the case it exists for. Same escape hatch as the
+    # restic path, for an instance that really has no attachments yet.
+    if [ "$total" -eq 0 ] && [ "${OFFSITE_ALLOW_WITHOUT_FILES:-0}" != "1" ]; then
+        echo "offsite/filestore: the filestore is empty - not declaring a run.
+For an instance that really has no attachments yet,
+OFFSITE_ALLOW_WITHOUT_FILES=1 switches this check off." >&2
         return 1
     fi
 
@@ -151,8 +157,10 @@ do_filestore() {
     if [ -z "$res" ]; then
         # Already there - a repeat within the same second after a reset. The
         # files are on the receiver, so record them and leave the declaring to
-        # the run that actually uploaded them.
-        cat "$work/new" >> "$LEDGER"
+        # the run that actually uploaded them. (If that run failed at the
+        # manifest append and this is a retry in the same second, the bundle
+        # stays undeclared - accepted, the daily schedule makes it unrealistic.)
+        cat "$work/new" >> "$LEDGER" || return 1
         echo "offsite/filestore: $name was already present, ledger updated."
         wo_filestore_heartbeat "$base" "$run_id" "$total" || return 1
         return 0
@@ -188,7 +196,7 @@ EOF
     # which wo-check ignores). Extending the ledger earlier would let the next
     # run find "nothing new" and send a heartbeat for files the receiver
     # cannot account for.
-    cat "$work/new" >> "$LEDGER"
+    cat "$work/new" >> "$LEDGER" || return 1
 
     echo "offsite/filestore: done - $added files in $name, $total files total"
 }
