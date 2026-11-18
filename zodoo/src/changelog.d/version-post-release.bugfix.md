@@ -1,0 +1,1 @@
+Versionen mit Zusatz wie `5.4.2.post1` (Odoo 19 pinnt `cbor2==5.4.2.post1`) brechen die Auswertung der Python-Abhängigkeiten nicht mehr ab. Bisher scheiterte der odoo-Hook beim `reload` nur mit einer Warnung, und `build` baute ein Image ohne Projekt-Requirements.
