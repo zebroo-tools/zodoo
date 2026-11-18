@@ -1,0 +1,3 @@
+type: fix
+description: "CI (Bake-Test): am Ende jedes Laufs werden die Compose-Projekte dieses Laufs samt Netzwerken abgebaut, auch nach Fehler oder Abbruch. Bisher blieben die Netzwerke liegen, bis der Docker auf dem Runner keinen freien Adressbereich mehr hatte ('all predefined address pools have been fully subnetted') und jeder Release-Lauf im Bake-Test scheiterte."
+breaking: false

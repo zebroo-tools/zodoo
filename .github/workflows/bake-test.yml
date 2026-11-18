@@ -179,6 +179,42 @@ jobs:
           path: ${{ runner.temp }}/bake-logs
           if-no-files-found: ignore
 
+      - name: Remove compose projects of this run
+        # cleanup-job-home.sh removes the containers, but not their compose
+        # networks. Every bake run left its networks behind (bake19<id>,
+        # zpt19<id>, zptpgbr<id>) until the shared daemon had no address pool
+        # left: "all predefined address pools have been fully subnetted"
+        # (17.11.2026, four failed releases). Only projects of THIS run are
+        # touched - the names end with the last 5 digits of GITHUB_RUN_ID
+        # (see ci_project_name in conftest.py), other jobs on the shared
+        # daemon keep theirs.
+        if: always()
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: |
+          set -uo pipefail
+          if ! docker info >/dev/null 2>&1; then
+            echo "::warning::docker not reachable, compose projects of this run stay"
+            exit 0
+          fi
+          suffix="${GITHUB_RUN_ID: -5}"
+          mapfile -t projects < <(
+            {
+              docker ps -a --format '{{.Label "com.docker.compose.project"}}'
+              docker network ls --format '{{.Label "com.docker.compose.project"}}'
+              docker volume ls --format '{{.Label "com.docker.compose.project"}}'
+            } | grep -E "^(bake[0-9]+|zpt19|zptpgbr)${suffix}\$" | sort -u
+          )
+          if ((${#projects[@]} == 0)); then
+            echo "no compose projects of run $GITHUB_RUN_ID left"
+            exit 0
+          fi
+          for project in "${projects[@]}"; do
+            echo "removing compose project $project"
+            docker compose -p "$project" down -v --remove-orphans || true
+            docker network prune -f --filter "label=com.docker.compose.project=$project" || true
+          done
+
       - name: Remove job home
         # Must stay the last step. Containers write into the job home as a
         # remapped UID that the runner user cannot delete, so the runner's own
