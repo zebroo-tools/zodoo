@@ -64,19 +64,26 @@ if [[ "$have_docker" == 1 ]]; then
     # running at the same time on the other runner (seen on 13.11.2026).
     own=()
     volumes=()
+    networks=()
     mapfile -t all < <(docker ps -aq --no-trunc)
     for id in "${all[@]}"; do
         mine=0
         vols=()
+        nets=()
         while IFS='|' read -r mtype msrc mname; do
+            if [[ "$mtype" == network ]]; then
+                nets+=("$msrc")
+                continue
+            fi
             case "$msrc/" in "$home_real/"*) mine=1 ;; esac
             [[ "$mtype" == volume && -n "$mname" ]] && vols+=("$mname")
         done < <(docker inspect --format \
-            '{{range .Mounts}}{{.Type}}|{{.Source}}|{{.Name}}{{println}}{{end}}' \
+            '{{range .Mounts}}{{.Type}}|{{.Source}}|{{.Name}}{{println}}{{end}}{{range $n, $_ := .NetworkSettings.Networks}}network|{{$n}}|{{println}}{{end}}' \
             "$id" 2>/dev/null)
         if [[ "$mine" == 1 ]]; then
             own+=("$id")
             volumes+=("${vols[@]}")
+            networks+=("${nets[@]}")
         fi
     done
     if ((${#own[@]})); then
@@ -86,6 +93,16 @@ if [[ "$have_docker" == 1 ]]; then
     # Named volumes of those containers; docker refuses volumes still in use.
     if ((${#volumes[@]})); then
         docker volume rm "${volumes[@]}" >/dev/null 2>&1 || true
+    fi
+    # Their compose networks too: every leftover network takes one subnet from
+    # the daemon's address pools, and on 17.11.2026 the pools were exhausted
+    # ("all predefined address pools have been fully subnetted"). The built-in
+    # networks stay; docker refuses networks that other containers still use.
+    if ((${#networks[@]})); then
+        for net in "${networks[@]}"; do
+            case "$net" in bridge | host | none) continue ;; esac
+            docker network rm "$net" >/dev/null 2>&1 || true
+        done
     fi
 fi
 
