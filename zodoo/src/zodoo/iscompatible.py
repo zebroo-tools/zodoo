@@ -145,10 +145,24 @@ def string_to_tuple(version):
         (1, 0, 0)
         >>> string_to_tuple("2.5")
         (2, 5)
+        >>> string_to_tuple("5.4.2.post1")
+        (5, 4, 2)
+        >>> string_to_tuple("1.0rc1")
+        (1, 0)
 
+    Only the leading release numbers count. Suffixes such as ``post1``,
+    ``rc1`` or ``dev0`` (PEP 440) end the tuple, e.g. Odoo 19 pins
+    ``cbor2==5.4.2.post1``.
     """
-
-    return tuple(map(int, version.split(".")))
+    result = []
+    for part in version.split("."):
+        match = re.match(r"\d+", part)
+        if not match:
+            break
+        result.append(int(match.group()))
+        if match.group() != part:
+            break
+    return tuple(result)
 
 
 operators = {
