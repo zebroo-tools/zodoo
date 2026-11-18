@@ -1,3 +1,0 @@
-type: fix
-description: "pgBackRest: the log directory is handed back to uid 999 before every pgbackrest command, so a host-side chown no longer silently stops pgbackrest from writing its log files."
-breaking: false

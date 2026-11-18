@@ -1,3 +1,0 @@
-type: feature
-description: "backup-metrics meldet auch die nächtliche Dump-Sicherung (art=\"dump\"): eingeschaltet, Anzahl und Zeitpunkt der neuesten fertigen Dump-Datei. Bisher stand die Sicherung bei Instanzen ohne pgbackrest in der Überwachung als „aus“."
-breaking: false

@@ -1,3 +1,0 @@
-type: fix
-description: "backup-metrics (art=\"dump\") zählt nur noch Dumps des eigenen Projekts (DB_ODOO_SEARCHFORMAT). Bei geteiltem Dump-Ordner verdeckte sonst der Dump eines anderen Projekts eine fehlende eigene Sicherung."
-breaking: false
