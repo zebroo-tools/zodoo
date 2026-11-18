@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.12.2
+
+- **Fix**: CI (Bake-Test): am Ende jedes Laufs werden die Compose-Projekte dieses Laufs samt Netzwerken abgebaut, auch nach Fehler oder Abbruch. Bisher blieben die Netzwerke liegen, bis der Docker auf dem Runner keinen freien Adressbereich mehr hatte ('all predefined address pools have been fully subnetted') und jeder Release-Lauf im Bake-Test scheiterte.
+
+
 ## 12.12.1
 
 - **Internal**: CI: Bake-Test räumt sein Compose-Netz wieder ab (odoo down -v braucht -f), und cleanup-job-home.sh entfernt zusätzlich die Netze der Job-Container. Vorher blieb pro Lauf ein Netz liegen, bis die Adresspools des Runner-Docker voll waren.
