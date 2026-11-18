@@ -1,3 +1,0 @@
-type: fix
-description: "Liegt ein Modul in mehreren addons_paths, nimmt zodoo jetzt die Kopie aus dem ERSTEN Pfad, wie Odoo selbst. Bisher gewann der letzte Pfad. Dadurch kamen die external_dependencies aus der falschen Kopie, und requirements.txt war falsch. Prüfen: Dasselbe Modul in zwei addons_paths anlegen, mit unterschiedlichen external_dependencies (Beispiel: password_security im Projektpfad mit zxcvbn, in OCA/server-auth ohne). 'odoo odoo-module show-addons-paths' zeigt die Reihenfolge. Nach 'odoo reload' muss requirements.txt im Projektverzeichnis die Abhängigkeiten der Kopie aus dem vorderen Pfad enthalten (im Beispiel zxcvbn)."
-breaking: false

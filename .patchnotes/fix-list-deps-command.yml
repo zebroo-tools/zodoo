@@ -1,3 +1,0 @@
-type: fix
-description: "`odoo list-deps` is a command again. A refactoring had moved its click decorators onto the helper `_compute_module_hash`, which turned up as `-compute-module-hash` while `list-deps` was missing (CICD test-runs failed with \"No such command 'list-deps'\")."
-breaking: false

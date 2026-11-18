@@ -1,5 +1,12 @@
 # Changelog
 
+## 12.12.1
+
+- **Internal**: CI: Bake-Test räumt sein Compose-Netz wieder ab (odoo down -v braucht -f), und cleanup-job-home.sh entfernt zusätzlich die Netze der Job-Container. Vorher blieb pro Lauf ein Netz liegen, bis die Adresspools des Runner-Docker voll waren.
+- **Fix**: Liegt ein Modul in mehreren addons_paths, nimmt zodoo jetzt die Kopie aus dem ERSTEN Pfad, wie Odoo selbst. Bisher gewann der letzte Pfad. Dadurch kamen die external_dependencies aus der falschen Kopie, und requirements.txt war falsch. Prüfen: Dasselbe Modul in zwei addons_paths anlegen, mit unterschiedlichen external_dependencies (Beispiel: password_security im Projektpfad mit zxcvbn, in OCA/server-auth ohne). 'odoo odoo-module show-addons-paths' zeigt die Reihenfolge. Nach 'odoo reload' muss requirements.txt im Projektverzeichnis die Abhängigkeiten der Kopie aus dem vorderen Pfad enthalten (im Beispiel zxcvbn).
+- **Fix**: `odoo list-deps` is a command again. A refactoring had moved its click decorators onto the helper `_compute_module_hash`, which turned up as `-compute-module-hash` while `list-deps` was missing (CICD test-runs failed with "No such command 'list-deps'").
+
+
 ## 12.12.0
 
 - **Feature**: backup-metrics meldet auch die nächtliche Dump-Sicherung (art="dump"): eingeschaltet, Anzahl und Zeitpunkt der neuesten fertigen Dump-Datei. Bisher stand die Sicherung bei Instanzen ohne pgbackrest in der Überwachung als „aus“.

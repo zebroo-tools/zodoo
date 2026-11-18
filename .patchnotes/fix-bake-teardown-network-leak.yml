@@ -1,3 +1,0 @@
-type: internal
-description: "CI: Bake-Test räumt sein Compose-Netz wieder ab (odoo down -v braucht -f), und cleanup-job-home.sh entfernt zusätzlich die Netze der Job-Container. Vorher blieb pro Lauf ein Netz liegen, bis die Adresspools des Runner-Docker voll waren."
-breaking: false
