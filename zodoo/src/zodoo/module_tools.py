@@ -798,8 +798,12 @@ class Modules:
         def get_all_manifests():
             """
             Returns a list of full paths of all manifests
+
+            If a module name exists in more than one addons path, the first
+            addons path wins - the same rule Odoo applies when it resolves
+            a module (odoo.modules.module.get_module_path).
             """
-            for path in reversed(_get_addons_paths()):
+            for path in _get_addons_paths():
                 mans = bashfind(path, name=manifest_file_names(), maxdepth=2)
                 for file in sorted(mans):
                     modname = file.parent.name
@@ -1430,11 +1434,12 @@ class Module:
         if isinstance(name, Module):
             name = name.name
         path = None
+        # First addons path wins, like in Odoo (see Modules._get_modules).
         for addon_path in _get_addons_paths():
             dir = addon_path / name
             if dir.exists():
                 path = dir
-            del dir
+                break
         if not path:
             possible_matches = _get_missing_module_matches(name)
             if possible_matches:

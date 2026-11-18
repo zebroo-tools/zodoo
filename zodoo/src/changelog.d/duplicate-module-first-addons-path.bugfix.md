@@ -1,0 +1,1 @@
+Modules that exist in more than one addons path now resolve to the copy in the first addons path, matching Odoo. Before, the last path won, so `external_dependencies` and the generated `requirements.txt` came from the wrong copy.
