@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.12.3
+
+- **Fix**: odoo reload/build: Abhängigkeiten mit Versionszusatz wie `cbor2==5.4.2.post1` (Odoo 19) brachen den odoo-Hook mit `invalid literal for int() … 'post1'` ab. Das Image entstand dann ohne die Projekt-Requirements, und Module mit Python-Abhängigkeiten (z. B. arrow) ließen sich nicht installieren. Zusätze wie post1, rc1 oder dev0 werden jetzt beim Versionsvergleich ignoriert.
+
+
 ## 12.12.2
 
 - **Fix**: CI (Bake-Test): am Ende jedes Laufs werden die Compose-Projekte dieses Laufs samt Netzwerken abgebaut, auch nach Fehler oder Abbruch. Bisher blieben die Netzwerke liegen, bis der Docker auf dem Runner keinen freien Adressbereich mehr hatte ('all predefined address pools have been fully subnetted') und jeder Release-Lauf im Bake-Test scheiterte.

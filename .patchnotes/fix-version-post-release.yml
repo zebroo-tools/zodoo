@@ -1,3 +1,0 @@
-type: fix
-description: "odoo reload/build: Abhängigkeiten mit Versionszusatz wie `cbor2==5.4.2.post1` (Odoo 19) brachen den odoo-Hook mit `invalid literal for int() … 'post1'` ab. Das Image entstand dann ohne die Projekt-Requirements, und Module mit Python-Abhängigkeiten (z. B. arrow) ließen sich nicht installieren. Zusätze wie post1, rc1 oder dev0 werden jetzt beim Versionsvergleich ignoriert."
-breaking: false
