@@ -40,10 +40,11 @@ wo_append_manifest() {
     [ -z "${FAIL_MANIFEST:-}" ] || return 22
     printf '%s\t%s\n' "$2" "$3" >> "$CALLS/manifests"
 }
+# Records the upload instead of streaming it: the real command needs `age`,
+# which the test machine does not have to provide.
 wo_put_stream() {
     local name="$1"
-    shift 3; [ "${1:-}" = "--" ] && shift
-    "$@" > /dev/null
+    [ -z "${FAIL_UPLOAD:-}" ] || return 1
     echo "$name" >> "$CALLS/objects"
     echo "$name 0000000000000000000000000000000000000000000000000000000000000000 42"
 }
@@ -128,3 +129,48 @@ def test_failed_declaration_fails_the_run(setup):
     # do_backup collects the failure through the return value.
     assert res.returncode == 7, (res.stdout, res.stderr)
     assert len(_manifests(setup)) == 1
+
+
+def _ledger(tmp_path: Path) -> str:
+    path = tmp_path / "state" / "filestore.ledger"
+    return path.read_text() if path.exists() else ""
+
+
+def test_failed_upload_fails_the_run_and_keeps_the_ledger(setup):
+    res = _run(setup, FAIL_UPLOAD="1")
+    assert res.returncode == 7, (res.stdout, res.stderr)
+    # Nothing arrived, so nothing may count as uploaded - otherwise these
+    # files are never offered again.
+    assert _ledger(setup) == ""
+    assert _manifests(setup) == []
+
+
+def test_bundle_is_declared_before_a_heartbeat_can_follow(setup):
+    """Upload ok, manifest POST failed, then a retry.
+
+    The bundle was never declared. If the ledger already listed its files, the
+    retry would find nothing new and send a fresh heartbeat for a backup the
+    receiver cannot account for.
+    """
+    res = _run(setup, FAIL_MANIFEST="1")
+    assert res.returncode == 7, (res.stdout, res.stderr)
+    assert _ledger(setup) == ""
+    assert _manifests(setup) == []
+
+    retry = _run(setup)
+    assert retry.returncode == 0, retry.stderr
+    lines = _manifests(setup)
+    assert len(lines) == 1, lines
+    assert lines[0][
+        "bundle"
+    ], "the retry sent a heartbeat instead of the bundle"
+    assert lines[0]["files_added"] == 1
+    assert "ab/abcdef" in _ledger(setup)
+
+
+def test_empty_filestore_is_not_a_successful_run(setup):
+    # An empty filestore is what an unmounted volume looks like.
+    (setup / "filestore" / "ab" / "abcdef").unlink()
+    res = _run(setup)
+    assert res.returncode == 7, (res.stdout, res.stderr)
+    assert _manifests(setup) == []

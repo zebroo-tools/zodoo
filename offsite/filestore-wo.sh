@@ -116,6 +116,14 @@ do_filestore() {
     total=$(wc -l < "$work/current")
     added=$(wc -l < "$work/new")
 
+    # An empty filestore is what an unmounted volume looks like (see
+    # wo_filestore_root). Declaring that as a successful run would silence
+    # the alarm for exactly the case it exists for.
+    if [ "$total" -eq 0 ]; then
+        echo "offsite/filestore: the filestore is empty - not declaring a run." >&2
+        return 1
+    fi
+
     if [ "$added" -eq 0 ]; then
         echo "offsite/filestore: nothing new ($total files already uploaded)."
         wo_filestore_heartbeat "$base" "$run_id" "$total" || return 1
@@ -135,7 +143,11 @@ do_filestore() {
     local name sum size res
     name="filestore-${run_id}.tar.gz.age"
     res=$(wo_put_stream "$name" "$base" "$work" -- \
-        bash -c "tar -C '$root' -cf - --no-recursion -T '$work/new' | gzip -n | age -r '$OFFSITE_WO_RECIPIENT'")
+        bash -c "tar -C '$root' -cf - --no-recursion -T '$work/new' | gzip -n | age -r '$OFFSITE_WO_RECIPIENT'") \
+        || return 1
+    # Explicit, because do_backup calls this function as `do_filestore || ...`
+    # and set -e does not apply there: a failed upload would otherwise fall
+    # through to the "already present" branch below and be recorded as safe.
     if [ -z "$res" ]; then
         # Already there - a repeat within the same second after a reset. The
         # files are on the receiver, so record them and leave the declaring to
@@ -149,15 +161,10 @@ do_filestore() {
     size=$(echo "$res" | cut -d' ' -f3)
     echo "offsite/filestore: uploaded $name ($size bytes)"
 
-    # Only now is the ledger extended: a crash between upload and this line
-    # costs a repeated upload of those files in the next bundle, never a file
-    # that is believed to be safe but never arrived.
-    cat "$work/new" >> "$LEDGER"
-
     # The manifest names bundles, not files. It is the far end's only way to
     # notice a missing bundle, and it must not leak content hashes.
     local ledger_sum
-    ledger_sum=$(LC_ALL=C sort -u "$LEDGER" | sha256sum | cut -d' ' -f1)
+    ledger_sum=$(LC_ALL=C sort -u "$work/known" "$work/new" | sha256sum | cut -d' ' -f1)
     cat > "$work/manifest.json" <<EOF
 {
   "run": "$run_id",
@@ -173,7 +180,15 @@ do_filestore() {
 }
 EOF
     wo_append_manifest "$base" "$(date -u +%Y%m%d)-filestore.jsonl" \
-        "$(tr -d '\n' < "$work/manifest.json")"
+        "$(tr -d '\n' < "$work/manifest.json")" || return 1
+
+    # Only now is the ledger extended - after the bundle is both on the
+    # receiver AND declared there. A failure before this line costs a repeated
+    # upload in the next run (the undeclared bundle stays behind as an orphan,
+    # which wo-check ignores). Extending the ledger earlier would let the next
+    # run find "nothing new" and send a heartbeat for files the receiver
+    # cannot account for.
+    cat "$work/new" >> "$LEDGER"
 
     echo "offsite/filestore: done - $added files in $name, $total files total"
 }
