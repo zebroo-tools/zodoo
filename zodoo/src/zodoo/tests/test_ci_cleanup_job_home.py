@@ -227,6 +227,36 @@ def test_only_containers_of_this_home_are_removed(env, tmp_path):
     )
 
 
+def test_networks_of_own_containers_are_removed(env, tmp_path):
+    """A bake that dies before its teardown leaves its compose network
+    behind. Every network takes one subnet from the daemon's pools; on
+    17.11.2026 they were exhausted. Networks of other jobs and the built-in
+    ones stay."""
+    runner_temp, environ, log = env
+    home, locked = _locked_home(runner_temp)
+    sock = home.resolve() / ".odoo" / "run" / "baketest190" / "postgres.socket"
+    mounts = tmp_path / "mounts"
+    mounts.write_text(
+        f"own1|bind|{sock}|\n"
+        "own1|network|bake19012345|\n"
+        "own1|network|bridge|\n"
+        "par1|bind|/srv/other/postgres.socket|\n"
+        "par1|network|bake19099999|\n"
+    )
+    environ["FAKE_DOCKER_PS"] = "own1 par1"
+    environ["FAKE_DOCKER_MOUNTS"] = str(mounts)
+    try:
+        res = _run(home, environ)
+    finally:
+        _unlock(locked)
+
+    assert res.returncode == 0, res.stdout + res.stderr
+    net_rm = [
+        l for l in log.read_text().splitlines() if l.startswith("network rm")
+    ]
+    assert net_rm == ["network rm bake19012345"]
+
+
 def test_leftovers_are_a_warning_not_a_failure(env):
     runner_temp, environ, _ = env
     home, locked = _locked_home(runner_temp)

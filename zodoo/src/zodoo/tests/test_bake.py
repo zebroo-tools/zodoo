@@ -26,7 +26,9 @@ import yaml
 
 from .conftest import _run, ci_project_name, requires_full_stack
 
-DEFAULT_VERSIONS = os.environ.get("ZODOO_BAKE_TEST_VERSIONS", "19.0").split(",")
+DEFAULT_VERSIONS = os.environ.get("ZODOO_BAKE_TEST_VERSIONS", "19.0").split(
+    ","
+)
 
 
 def _project_image(project_name, service):
@@ -52,9 +54,13 @@ def _project_image(project_name, service):
 def _service_environment(project_name, service):
     """Environment the generated compose file hands to ``service`` - in a
     Kubernetes deployment exactly these values come in as pod env."""
-    compose = Path.home() / ".odoo" / "run" / project_name / "docker-compose.yml"
+    compose = (
+        Path.home() / ".odoo" / "run" / project_name / "docker-compose.yml"
+    )
     environment = (
-        yaml.safe_load(compose.read_text())["services"][service].get("environment")
+        yaml.safe_load(compose.read_text())["services"][service].get(
+            "environment"
+        )
         or {}
     )
     if isinstance(environment, list):
@@ -102,7 +108,8 @@ def isolated_home():
 @pytest.mark.parametrize("version", DEFAULT_VERSIONS)
 def test_bake_flow(version, isolated_home, tmp_path):
     project_name = ci_project_name(
-        f"baketest{version.replace('.', '')}", f"bake{version.replace('.', '')}"
+        f"baketest{version.replace('.', '')}",
+        f"bake{version.replace('.', '')}",
     )
     # The dir name must match project_name because `make_customs` runs an
     # internal `odoo reload` without `-p`, which derives the project name
@@ -179,7 +186,9 @@ def test_bake_flow(version, isolated_home, tmp_path):
 
         # 5) Bake should have produced <project_name>.env in the customs dir.
         env_file = project_dir / f"{project_name}.env"
-        assert env_file.exists(), f"bake did not create the env file at {env_file}"
+        assert (
+            env_file.exists()
+        ), f"bake did not create the env file at {env_file}"
         env_content = env_file.read_text()
         assert "ODOO_DEMO=1" in env_content
         assert "SHA_IN_DOCKER=1" in env_content
@@ -190,7 +199,13 @@ def test_bake_flow(version, isolated_home, tmp_path):
         #    this (zodoo <= 12.10.5 lost ZODOO_EMBED here and the image had no
         #    /opt/zodoo).
         _run(
-            ["odoo", "-p", project_name, "setting", "DOCKER_IMAGE_TAG=baketest"],
+            [
+                "odoo",
+                "-p",
+                project_name,
+                "setting",
+                "DOCKER_IMAGE_TAG=baketest",
+            ],
             cwd=project_dir,
         )
         _run(["odoo", "-p", project_name, "reload"], cwd=project_dir, **heavy)
@@ -206,7 +221,10 @@ def test_bake_flow(version, isolated_home, tmp_path):
         #    mounts, no /.dockerenv, cgroup v2 namespace showing only "0::/".
         #    The startup update must finish with exit code 0 against the
         #    project database (zodoo 12.10.7 failed here with "assert dbname").
-        _run(["odoo", "-p", project_name, "up", "-d", "postgres"], cwd=project_dir)
+        _run(
+            ["odoo", "-p", project_name, "up", "-d", "postgres"],
+            cwd=project_dir,
+        )
         env = _service_environment(project_name, "odoo")
         env["KUBERNETES_SERVICE_HOST"] = "10.0.0.1"
         env["UPDATE_ON_STARTUP"] = "1"
@@ -247,8 +265,11 @@ def test_bake_flow(version, isolated_home, tmp_path):
 
     finally:
         # Best-effort teardown so a failed run does not leave containers behind.
+        # -f is required: without it `down -v` refuses to drop the volumes and
+        # removes nothing, so every bake left its network behind until the
+        # daemon's address pools were exhausted (17.11.2026).
         subprocess.run(
-            ["odoo", "-p", project_name, "down", "-v"],
+            ["odoo", "-f", "-p", project_name, "down", "-v"],
             cwd=str(project_dir),
             timeout=300,
         )
