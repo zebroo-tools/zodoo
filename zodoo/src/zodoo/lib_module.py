@@ -2363,12 +2363,6 @@ def list_descendants(ctx, config, module, customs, following):
         click.secho(f"descedant: {mod}", fg="green")
 
 
-@odoo_module.command()
-@click.argument("module", required=True, shell_complete=_get_available_modules)
-@click.option("-N", "--no-cache", is_flag=True)
-@click.option("-c", "--customs", is_flag=True)
-@pass_config
-@click.pass_context
 def _compute_module_hash(config, data):
     from .module_tools import Module
     from .module_tools import NotInAddonsPath
@@ -2408,6 +2402,12 @@ def _compute_module_hash(config, data):
     return get_hash(to_hash)
 
 
+@odoo_module.command()
+@click.argument("module", required=True, shell_complete=_get_available_modules)
+@click.option("-N", "--no-cache", is_flag=True)
+@click.option("-c", "--customs", is_flag=True)
+@pass_config
+@click.pass_context
 def list_deps(ctx, config, module, no_cache, customs):
     import arrow
 
