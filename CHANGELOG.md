@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.12.4
+
+- **Fix**: Restoring a dump (e.g. on new CICD branches) no longer fails with 'additional privileges requested: pass --allow=fs.read=…'. With docker compose >= 5 the implicit image build during `docker compose run` goes through buildx bake; zodoo now sets BUILDX_BAKE_ENTITLEMENTS_FS=0 for every compose call, not only for `odoo build`.
+
+
 ## 12.12.3
 
 - **Fix**: odoo reload/build: Abhängigkeiten mit Versionszusatz wie `cbor2==5.4.2.post1` (Odoo 19) brachen den odoo-Hook mit `invalid literal for int() … 'post1'` ab. Das Image entstand dann ohne die Projekt-Requirements, und Module mit Python-Abhängigkeiten (z. B. arrow) ließen sich nicht installieren. Zusätze wie post1, rc1 oder dev0 werden jetzt beim Versionsvergleich ignoriert.
