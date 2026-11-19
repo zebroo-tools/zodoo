@@ -27,15 +27,15 @@ Odoo machine                                     backup server
 
 A run writes into **two** repositories under the same customer area:
 
-| Repository      | Contents                                | Snapshot tags |
-| --------------- | --------------------------------------- | ------------- |
-| `<area>/db/`    | pgBackRest repository, or the database dump | `zodoo,db` |
-| `<area>/files/` | the filestore of this database          | `zodoo,files` |
+| Repository      | Contents                                    | Snapshot tags |
+| --------------- | ------------------------------------------- | ------------- |
+| `<area>/db/`    | pgBackRest repository, or the database dump | `zodoo,db`    |
+| `<area>/files/` | the filestore of this database              | `zodoo,files` |
 
 The reason is monitoring, not tidiness. With everything in one repository, an
 arriving filestore hides a database dump that stopped coming: the area looks
 freshly written, and the part that matters is missing. Split, each stream has its
-own age, and the backup server alarms per stream — the mail then says *which*
+own age, and the backup server alarms per stream — the mail then says _which_
 half stopped.
 
 Both live in the same area and therefore share access credentials and
@@ -78,11 +78,11 @@ is only discovered when the backup is needed.
 
 The backup server issues **no repository key**. `odoo offsite register` receives:
 
-| | |
-| --- | --- |
-| `OFFSITE_REST_USER` / `OFFSITE_REST_PASSWORD` | an upload account for this area |
-| `OFFSITE_WO_URL` | the write-only receiver |
-| `OFFSITE_WO_RECIPIENT` / `OFFSITE_WO_DB_RECIPIENT` | the two age **public** keys |
+|                                                    |                                 |
+| -------------------------------------------------- | ------------------------------- |
+| `OFFSITE_REST_USER` / `OFFSITE_REST_PASSWORD`      | an upload account for this area |
+| `OFFSITE_WO_URL`                                   | the write-only receiver         |
+| `OFFSITE_WO_RECIPIENT` / `OFFSITE_WO_DB_RECIPIENT` | the two age **public** keys     |
 
 Public means these may sit in a settings file and travel over the wire: they
 encrypt, they decrypt nothing. So a machine set up this way holds **no secret
@@ -171,10 +171,10 @@ disk that is already paid for) and adds point-in-time recovery on top.
 
 There are two streams, and they are configured independently:
 
-| stream | needs | typical source |
-| --- | --- | --- |
-| filestore | `OFFSITE_WO_URL` + `OFFSITE_WO_RECIPIENT` | enrollment |
-| database | `OFFSITE_WO_URL` + `OFFSITE_WO_DB_RECIPIENT` | enrollment |
+| stream    | needs                                        | typical source |
+| --------- | -------------------------------------------- | -------------- |
+| filestore | `OFFSITE_WO_URL` + `OFFSITE_WO_RECIPIENT`    | enrollment     |
+| database  | `OFFSITE_WO_URL` + `OFFSITE_WO_DB_RECIPIENT` | enrollment     |
 
 `odoo offsite backup` runs **whichever of them is configured**:
 
@@ -186,7 +186,7 @@ There are two streams, and they are configured independently:
 **The mixed shape is our normal one:** the database goes to pgBackRest, only
 the filestore goes offsite, and `OFFSITE_WO_DB_RECIPIENT` is deliberately
 empty. That combination used to back up **nothing at all** — the dispatch
-demanded that *both* streams be write-only, fell through to a check on
+demanded that _both_ streams be write-only, fell through to a check on
 `OFFSITE_REPO` (also empty in that shape) and returned success. The nightly
 cron did that for days on two instances while reporting no error; the areas on
 the backup server simply stayed at zero files. Fixed 05.09.2026.
@@ -218,9 +218,9 @@ hard part: **every attachment is named after the SHA-1 of its content**
 
 Set both of these and the filestore leaves the restic path:
 
-| Setting | What it is |
-| --- | --- |
-| `OFFSITE_WO_URL` | The write-only receiver, e.g. `https://10.222.0.106:8444/<area>/` |
+| Setting                | What it is                                                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `OFFSITE_WO_URL`       | The write-only receiver, e.g. `https://10.222.0.106:8444/<area>/`                                                  |
 | `OFFSITE_WO_RECIPIENT` | An **age public key** (`age1…`). Generate with `age-keygen`; the private key belongs in 1Password and nowhere else |
 
 ```bash
@@ -229,11 +229,11 @@ odoo offsite filestore     # or automatically as part of `odoo offsite backup`
 
 What the machine can then do, and what it cannot:
 
-| | restic path | write-only path |
-| --- | --- | --- |
-| upload | yes | yes |
+|                       | restic path        | write-only path                                              |
+| --------------------- | ------------------ | ------------------------------------------------------------ |
+| upload                | yes                | yes                                                          |
 | read what it uploaded | **yes, all of it** | **no** — encrypted to a public key it has no private half of |
-| delete | no (append-only) | no |
+| delete                | no (append-only)   | no                                                           |
 
 When a write-only target is configured it **replaces** the restic `files`
 stream rather than running beside it. Two copies of the same attachments in two
@@ -247,10 +247,16 @@ object per file: an instance with a million attachments would otherwise mean a
 million HTTP requests. Alongside it goes a manifest:
 
 ```json
-{ "run": "20260821T173222Z", "kind": "filestore",
+{
+  "run": "20260821T173222Z",
+  "kind": "filestore",
   "bundle": "filestore-20260821T173222Z-85914f45a55c.tar.gz.age",
-  "sha256": "85914f45…", "size": 665623,
-  "files_added": 56, "files_total": 56, "ledger_sha256": "8f73c96f…" }
+  "sha256": "85914f45…",
+  "size": 665623,
+  "files_added": 56,
+  "files_total": 56,
+  "ledger_sha256": "8f73c96f…"
+}
 ```
 
 The manifest lists **bundles, never file names**. That is deliberate: a file
@@ -258,6 +264,14 @@ name is the hash of its content, so a name list at the target would let someone
 confirm whether a particular known document is in the backup. Bundle names and
 checksums are enough for the receiving side to notice a missing bundle, which is
 what completeness means here.
+
+A run with **nothing new** uploads no bundle but still appends a line, without
+`bundle` and with `files_added: 0`. The backup server measures the age of the
+newest manifest; without that line a quiet instance (no new attachments for
+weeks) would look exactly like one whose job stopped. A run only declares
+itself when it succeeded: a failed upload, a failed manifest append or an empty
+filestore (an unmounted volume) make the run fail, and the local ledger is
+extended only after the bundle is both uploaded and declared.
 
 ### The ledger
 
@@ -309,10 +323,10 @@ on the far side. This path uploads to a receiver that only ever stores what it
 is given and knows nothing about postgres — see
 [12-pgbackrest.md](160-pgbackrest.md#repository-topology).
 
-| Setting | What it is |
-| --- | --- |
+| Setting                   | What it is                                                                                      |
+| ------------------------- | ----------------------------------------------------------------------------------------------- |
 | `OFFSITE_WO_DB_RECIPIENT` | age **public** key for the database stream. Deliberately a different key from the filestore one |
-| `OFFSITE_WAL_CRON` | how often WAL is pushed. `* * * * *` — every minute |
+| `OFFSITE_WAL_CRON`        | how often WAL is pushed. `* * * * *` — every minute                                             |
 
 ```bash
 odoo offsite db     # backups + WAL (after the nightly pgbackrest backup)
@@ -348,11 +362,11 @@ a real request, and one shared key cannot express it.
 WAL compresses extraordinarily well because a segment is a fixed 16 MiB
 regardless of how much is in it:
 
-| | raw | transferred |
-| --- | --- | --- |
-| quiet WAL segment | 16 MiB | ~16 KB (factor ~1000) |
-| busy WAL segment | 16 MiB | ~630 KB |
-| base backup (small test DB) | 9.6 MB datadir | 5.8 MB |
+|                             | raw            | transferred           |
+| --------------------------- | -------------- | --------------------- |
+| quiet WAL segment           | 16 MiB         | ~16 KB (factor ~1000) |
+| busy WAL segment            | 16 MiB         | ~630 KB               |
+| base backup (small test DB) | 9.6 MB datadir | 5.8 MB                |
 
 A base backup is a full copy every time, so **its frequency is the only real
 lever on growth**. WAL volume is the irreducible part — it is the actual write
@@ -384,7 +398,7 @@ areas have separate ledgers and locks. They queue on throughput.
 Two things follow for the client:
 
 - **Every instance uploaded in the same second**, because they all run
-  `* * * * *`. The WAL job now waits a *stable* offset derived from the project
+  `* * * * *`. The WAL job now waits a _stable_ offset derived from the project
   name — stable rather than random, so each machine keeps its own second and runs
   cannot overtake each other.
 - **One manifest per run does not scale**: hundreds of files per day per area on a
@@ -440,7 +454,7 @@ declaring our value for those bytes would make the completeness check report a
 mismatch that is not one. It stays declared by the run that uploaded it, and
 manifests are read cumulatively.
 
-`HEAD` answers only whether a *name* is taken - no content, no size. There is
+`HEAD` answers only whether a _name_ is taken - no content, no size. There is
 still no `GET`.
 
 ### Local space on the machine
@@ -448,11 +462,11 @@ still no `GET`.
 pgBackRest writes into its local repository before anything is uploaded, so local
 space is needed for the local retention window. Three settings decide how much:
 
-| Setting | Default | Effect |
-| --- | --- | --- |
-| `PGBR_COMPRESS_TYPE` | `zst` | roughly a third of the raw size at low CPU cost |
-| `PGBR_RETENTION_FULL` | `14` (days, `..._TYPE=time`) | how far back a continuous point-in-time window reaches |
-| `PGBR_FULL_CRON` / `..._DIFF_CRON` | weekly / daily | weekly full plus daily differentials, rather than a full every night |
+| Setting                            | Default                      | Effect                                                               |
+| ---------------------------------- | ---------------------------- | -------------------------------------------------------------------- |
+| `PGBR_COMPRESS_TYPE`               | `zst`                        | roughly a third of the raw size at low CPU cost                      |
+| `PGBR_RETENTION_FULL`              | `14` (days, `..._TYPE=time`) | how far back a continuous point-in-time window reaches               |
+| `PGBR_FULL_CRON` / `..._DIFF_CRON` | weekly / daily               | weekly full plus daily differentials, rather than a full every night |
 
 The schedule is the real lever. A daily full of a 45 GiB database is about
 16 GiB compressed, i.e. 5.8 TiB a year for one instance. Weekly full plus daily
@@ -513,18 +527,18 @@ the write-only receiver needs it.
 
 ## Commands
 
-| Command                      | What it does                                                                           |
-| ---------------------------- | -------------------------------------------------------------------------------------- |
-| `odoo offsite register`      | Request a customer area, then pick up credentials after approval.                      |
-| `odoo offsite filestore`     | Push the filestore to the write-only target. Needs no repository key.                  |
-| `odoo offsite db`            | Push base backups + WAL to the write-only target.                                      |
-| `odoo offsite wal`           | Push newly archived WAL only. Runs every minute.                                        |
-| `odoo offsite backup`        | Run a backup now. Same run as the nightly cron; a quiet no-op without `RUN_OFFSITE=1`. |
-| `odoo offsite init`          | Create the repository (the first backup does this anyway).                             |
-| `odoo offsite list`          | List snapshots.                                                                        |
-| `odoo offsite info`          | Repository stats (size, deduplication).                                                |
-| `odoo offsite check`         | Verify integrity by re-reading the data. Takes time and costs traffic.                 |
-| `odoo offsite prune`         | Apply retention. Refused against append-only targets, with an explanation.             |
+| Command                      | What it does                                                                                        |
+| ---------------------------- | --------------------------------------------------------------------------------------------------- |
+| `odoo offsite register`      | Request a customer area, then pick up credentials after approval.                                   |
+| `odoo offsite filestore`     | Push the filestore to the write-only target. Needs no repository key.                               |
+| `odoo offsite db`            | Push base backups + WAL to the write-only target.                                                   |
+| `odoo offsite wal`           | Push newly archived WAL only. Runs every minute.                                                    |
+| `odoo offsite backup`        | Run a backup now. Same run as the nightly cron; a quiet no-op without `RUN_OFFSITE=1`.              |
+| `odoo offsite init`          | Create the repository (the first backup does this anyway).                                          |
+| `odoo offsite list`          | List snapshots.                                                                                     |
+| `odoo offsite info`          | Repository stats (size, deduplication).                                                             |
+| `odoo offsite check`         | Verify integrity by re-reading the data. Takes time and costs traffic.                              |
+| `odoo offsite prune`         | Apply retention. Refused against append-only targets, with an explanation.                          |
 | `odoo offsite restic <args>` | Escape hatch: any `restic` command. `OFFSITE_STREAM=db\|files` picks the repository (default `db`). |
 
 `list`, `info`, `check` and `init` run over both repositories and label which one
@@ -597,8 +611,8 @@ location and at the integrity of the history.
 | `OFFSITE_REPO is empty`                               | No target configured. Run `odoo offsite register`.                                                                                                  |
 | `OFFSITE_REST_USER is empty`                          | Area credentials missing — the registration never completed.                                                                                        |
 | restic refuses the connection / certificate error     | `rest-server.crt` missing or the server certificate changed. Re-run `register`; if the fingerprint really changed, find out why before trusting it. |
-| `Enrollment service … is unreachable`                    | The enrollment service is only reachable over the zebroo VPN. Is this machine in a VPN group with the backup server?                                |
-| Backup aborts with "no database state in the backup"    | Working as intended. Set `RUN_PGBACKREST=1`, or use `odoo offsite backup` (pulls a dump itself).                                                    |
+| `Enrollment service … is unreachable`                 | The enrollment service is only reachable over the zebroo VPN. Is this machine in a VPN group with the backup server?                                |
+| Backup aborts with "no database state in the backup"  | Working as intended. Set `RUN_PGBACKREST=1`, or use `odoo offsite backup` (pulls a dump itself).                                                    |
 | Stale lock after a crash / reboot                     | The run breaks a hanging lock itself before starting. `rest-server` permits lock removal even in append-only mode.                                  |
 | Offsite target is a path and the run refuses to start | Parent directory missing — the disk is probably not mounted. Do not "fix" this by creating the directory.                                           |
 

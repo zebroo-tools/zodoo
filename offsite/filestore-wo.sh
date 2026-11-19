@@ -69,10 +69,31 @@ looks like."
     echo "$root"
 }
 
+# A manifest line for a run that uploaded nothing, because nothing was new.
+#
+# Without it, a quiet instance (no new attachments for weeks) looks exactly
+# like one whose job stopped: the newest manifest on the receiver ages either
+# way, and the "no backup for 48 h" alarm on the backup server cannot tell the
+# two apart. So every successful run declares itself, and the age of the
+# newest manifest means "time since the last successful run".
+#
+# No "bundle" key: there is no object to check, and wo-check only verifies
+# entries that name one. files_total is the current number of files, as
+# in every other line.
+wo_filestore_heartbeat() {
+    local base="$1" run_id="$2" total="$3"
+    local ledger_sum
+    ledger_sum=$(LC_ALL=C sort -u "$LEDGER" | sha256sum | cut -d' ' -f1)
+    wo_append_manifest "$base" "$(date -u +%Y%m%d)-filestore.jsonl" \
+        "{\"run\": \"$run_id\", \"kind\": \"filestore\", \"host\": \"${PROJECT_NAME:-zodoo}\", \"database\": \"${DBNAME:-}\", \"files_added\": 0, \"files_total\": $total, \"ledger_sha256\": \"$ledger_sum\"}"
+}
+
 do_filestore() {
     wo_require
     local root
-    root=$(wo_filestore_root)
+    # Every step checks its own result: do_backup calls this function as
+    # `do_filestore || ...`, and set -e does not apply there.
+    root=$(wo_filestore_root) || return 1
 
     WO_CACERT=()
     [ -f "$CA_CERT" ] && WO_CACERT=(--cacert "$CA_CERT")
@@ -81,24 +102,37 @@ do_filestore() {
     local run_id
     run_id=$(date -u +%Y%m%dT%H%M%SZ)
     local work
-    work=$(wo_workdir)
+    work=$(wo_workdir) || return 1
     # shellcheck disable=SC2064  # expand $work now, not at trap time
     trap "rm -rf '$work'" EXIT
 
-    touch "$LEDGER"
+    touch "$LEDGER" || return 1
 
     # Paths relative to the filestore root, so the bundle can be unpacked
     # straight into a restored filestore.
-    find "$root" -type f -printf '%P\n' | LC_ALL=C sort > "$work/current"
-    LC_ALL=C sort -u "$LEDGER" > "$work/known"
-    LC_ALL=C comm -23 "$work/current" "$work/known" > "$work/new"
+    find "$root" -type f -printf '%P\n' | LC_ALL=C sort > "$work/current" \
+        || return 1
+    LC_ALL=C sort -u "$LEDGER" > "$work/known" || return 1
+    LC_ALL=C comm -23 "$work/current" "$work/known" > "$work/new" || return 1
 
     local total added
     total=$(wc -l < "$work/current")
     added=$(wc -l < "$work/new")
 
+    # An empty filestore is what an unmounted volume looks like (see
+    # wo_filestore_root). Declaring that as a successful run would silence
+    # the alarm for exactly the case it exists for. Same escape hatch as the
+    # restic path, for an instance that really has no attachments yet.
+    if [ "$total" -eq 0 ] && [ "${OFFSITE_ALLOW_WITHOUT_FILES:-0}" != "1" ]; then
+        echo "offsite/filestore: the filestore is empty - not declaring a run.
+For an instance that really has no attachments yet,
+OFFSITE_ALLOW_WITHOUT_FILES=1 switches this check off." >&2
+        return 1
+    fi
+
     if [ "$added" -eq 0 ]; then
         echo "offsite/filestore: nothing new ($total files already uploaded)."
+        wo_filestore_heartbeat "$base" "$run_id" "$total" || return 1
         return 0
     fi
 
@@ -115,28 +149,30 @@ do_filestore() {
     local name sum size res
     name="filestore-${run_id}.tar.gz.age"
     res=$(wo_put_stream "$name" "$base" "$work" -- \
-        bash -c "tar -C '$root' -cf - --no-recursion -T '$work/new' | gzip -n | age -r '$OFFSITE_WO_RECIPIENT'")
+        bash -c "tar -C '$root' -cf - --no-recursion -T '$work/new' | gzip -n | age -r '$OFFSITE_WO_RECIPIENT'") \
+        || return 1
+    # Explicit, because do_backup calls this function as `do_filestore || ...`
+    # and set -e does not apply there: a failed upload would otherwise fall
+    # through to the "already present" branch below and be recorded as safe.
     if [ -z "$res" ]; then
         # Already there - a repeat within the same second after a reset. The
         # files are on the receiver, so record them and leave the declaring to
-        # the run that actually uploaded them.
-        cat "$work/new" >> "$LEDGER"
+        # the run that actually uploaded them. (If that run failed at the
+        # manifest append and this is a retry in the same second, the bundle
+        # stays undeclared - accepted, the daily schedule makes it unrealistic.)
+        cat "$work/new" >> "$LEDGER" || return 1
         echo "offsite/filestore: $name was already present, ledger updated."
+        wo_filestore_heartbeat "$base" "$run_id" "$total" || return 1
         return 0
     fi
     sum=$(echo "$res" | cut -d' ' -f2)
     size=$(echo "$res" | cut -d' ' -f3)
     echo "offsite/filestore: uploaded $name ($size bytes)"
 
-    # Only now is the ledger extended: a crash between upload and this line
-    # costs a repeated upload of those files in the next bundle, never a file
-    # that is believed to be safe but never arrived.
-    cat "$work/new" >> "$LEDGER"
-
     # The manifest names bundles, not files. It is the far end's only way to
     # notice a missing bundle, and it must not leak content hashes.
     local ledger_sum
-    ledger_sum=$(LC_ALL=C sort -u "$LEDGER" | sha256sum | cut -d' ' -f1)
+    ledger_sum=$(LC_ALL=C sort -u "$work/known" "$work/new" | sha256sum | cut -d' ' -f1)
     cat > "$work/manifest.json" <<EOF
 {
   "run": "$run_id",
@@ -152,7 +188,15 @@ do_filestore() {
 }
 EOF
     wo_append_manifest "$base" "$(date -u +%Y%m%d)-filestore.jsonl" \
-        "$(tr -d '\n' < "$work/manifest.json")"
+        "$(tr -d '\n' < "$work/manifest.json")" || return 1
+
+    # Only now is the ledger extended - after the bundle is both on the
+    # receiver AND declared there. A failure before this line costs a repeated
+    # upload in the next run (the undeclared bundle stays behind as an orphan,
+    # which wo-check ignores). Extending the ledger earlier would let the next
+    # run find "nothing new" and send a heartbeat for files the receiver
+    # cannot account for.
+    cat "$work/new" >> "$LEDGER" || return 1
 
     echo "offsite/filestore: done - $added files in $name, $total files total"
 }
