@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.12.5
+
+- **Fix**: Offsite-Filestore: auch ein Lauf ohne neue Anhänge hängt eine Manifestzeile an, damit der 48-h-Alarm auf dem Backup-Server nicht bei ruhigen Instanzen feuert
+
+
 ## 12.12.4
 
 - **Fix**: Restoring a dump (e.g. on new CICD branches) no longer fails with 'additional privileges requested: pass --allow=fs.read=…'. With docker compose >= 5 the implicit image build during `docker compose run` goes through buildx bake; zodoo now sets BUILDX_BAKE_ENTITLEMENTS_FS=0 for every compose call, not only for `odoo build`.

@@ -1,3 +1,0 @@
-type: fix
-description: "Offsite-Filestore: auch ein Lauf ohne neue Anhänge hängt eine Manifestzeile an, damit der 48-h-Alarm auf dem Backup-Server nicht bei ruhigen Instanzen feuert"
-breaking: false
