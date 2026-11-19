@@ -848,6 +848,13 @@ def _set_default_envs(env):
             "COMPOSE_DOCKER_CLI_BUILD": "1",
         }
     )
+    # docker compose >= 5 builds missing images through `buildx bake`, also
+    # implicitly from `run`/`up` (e.g. cronjobshell during `restore`). Bake
+    # then fails with "additional privileges requested: pass
+    # --allow=fs.read=..." because the Dockerfiles live in the run dir,
+    # outside the build context. `odoo build` already sets this; do it for
+    # every compose call so implicit builds do not break.
+    env.setdefault("BUILDX_BAKE_ENTITLEMENTS_FS", "0")
     return env
 
 
