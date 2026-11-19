@@ -188,14 +188,6 @@ jobs:
         # touched - the names end with the last 5 digits of GITHUB_RUN_ID
         # (see ci_project_name in conftest.py), other jobs on the shared
         # daemon keep theirs.
-        #
-        # The images of the run are removed here too. Every run builds its
-        # own <project>-<service> images, and no later run uses them by
-        # name; without this the runner disk filled up within about a day.
-        # They are found by name, not through "compose down --rmi": when the
-        # tests already ran "odoo down -v", no container is left for compose
-        # to find them by. No --force: an image that still has a container
-        # stays and only produces a warning.
         if: always()
         shell: bash
         working-directory: ${{ runner.temp }}
@@ -215,12 +207,44 @@ jobs:
           )
           if ((${#projects[@]} == 0)); then
             echo "no compose projects of run $GITHUB_RUN_ID left"
+            exit 0
           fi
           for project in "${projects[@]}"; do
             echo "removing compose project $project"
             docker compose -p "$project" down -v --remove-orphans || true
             docker network prune -f --filter "label=com.docker.compose.project=$project" || true
           done
+
+      - name: Remove job home
+        # Must stay the last step. Containers write into the job home as a
+        # remapped UID that the runner user cannot delete, so the runner's own
+        # _temp cleanup fails and h.* piles up until the disk is full (see the
+        # script header). always(): also after failure, cancel and timeout.
+        #
+        # Afterwards the images of this run are removed. Every run builds its
+        # own <project>-<service> images, and no later run uses them by name;
+        # without this the runner disk filled up within about a day. This has
+        # to happen after cleanup-job-home.sh: containers that are not part of
+        # a compose project (e.g. the pgbackrest one) are only removed there
+        # and would otherwise keep their image. Found by name, not through
+        # "compose down --rmi": after the tests' own "odoo down -v" compose
+        # finds no container to map the images from. No --force: an image
+        # that still has a container stays and only produces a warning.
+        if: always() && env.ZEBROO_JOB_HOME != ''
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: |
+          script="$GITHUB_WORKSPACE/.github/scripts/cleanup-job-home.sh"
+          if [[ ! -f "$script" ]]; then
+            echo "::warning::$script missing (checkout failed?), job home $ZEBROO_JOB_HOME stays"
+            exit 0
+          fi
+          bash "$script" "$ZEBROO_JOB_HOME"
+          if ! docker info >/dev/null 2>&1; then
+            echo "::warning::docker not reachable, images of this run stay"
+            exit 0
+          fi
+          suffix="${GITHUB_RUN_ID: -5}"
           mapfile -t images < <(
             docker image ls --format '{{.Repository}}:{{.Tag}}' \
               | grep -E "^(bake[0-9]+|zpt19|zptpgbr)${suffix}-[a-z0-9_.-]+:" | sort -u
@@ -234,19 +258,3 @@ jobs:
             docker image rm "$image" >/dev/null \
               || echo "::warning::image $image stays (still in use?)"
           done
-
-      - name: Remove job home
-        # Must stay the last step. Containers write into the job home as a
-        # remapped UID that the runner user cannot delete, so the runner's own
-        # _temp cleanup fails and h.* piles up until the disk is full (see the
-        # script header). always(): also after failure, cancel and timeout.
-        if: always() && env.ZEBROO_JOB_HOME != ''
-        shell: bash
-        working-directory: ${{ runner.temp }}
-        run: |
-          script="$GITHUB_WORKSPACE/.github/scripts/cleanup-job-home.sh"
-          if [[ ! -f "$script" ]]; then
-            echo "::warning::$script missing (checkout failed?), job home $ZEBROO_JOB_HOME stays"
-            exit 0
-          fi
-          bash "$script" "$ZEBROO_JOB_HOME"
