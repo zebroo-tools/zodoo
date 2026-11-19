@@ -188,6 +188,14 @@ jobs:
         # touched - the names end with the last 5 digits of GITHUB_RUN_ID
         # (see ci_project_name in conftest.py), other jobs on the shared
         # daemon keep theirs.
+        #
+        # The images of the run are removed here too. Every run builds its
+        # own <project>-<service> images, and no later run uses them by
+        # name; without this the runner disk filled up within about a day.
+        # They are found by name, not through "compose down --rmi": when the
+        # tests already ran "odoo down -v", no container is left for compose
+        # to find them by. No --force: an image that still has a container
+        # stays and only produces a warning.
         if: always()
         shell: bash
         working-directory: ${{ runner.temp }}
@@ -207,12 +215,24 @@ jobs:
           )
           if ((${#projects[@]} == 0)); then
             echo "no compose projects of run $GITHUB_RUN_ID left"
-            exit 0
           fi
           for project in "${projects[@]}"; do
             echo "removing compose project $project"
             docker compose -p "$project" down -v --remove-orphans || true
             docker network prune -f --filter "label=com.docker.compose.project=$project" || true
+          done
+          mapfile -t images < <(
+            docker image ls --format '{{.Repository}}:{{.Tag}}' \
+              | grep -E "^(bake[0-9]+|zpt19|zptpgbr)${suffix}-[a-z0-9_.-]+:" | sort -u
+          )
+          if ((${#images[@]} == 0)); then
+            echo "no images of run $GITHUB_RUN_ID left"
+            exit 0
+          fi
+          echo "removing ${#images[@]} images of run $GITHUB_RUN_ID"
+          for image in "${images[@]}"; do
+            docker image rm "$image" >/dev/null \
+              || echo "::warning::image $image stays (still in use?)"
           done
 
       - name: Remove job home
