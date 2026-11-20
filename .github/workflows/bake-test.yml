@@ -220,6 +220,16 @@ jobs:
         # remapped UID that the runner user cannot delete, so the runner's own
         # _temp cleanup fails and h.* piles up until the disk is full (see the
         # script header). always(): also after failure, cancel and timeout.
+        #
+        # Afterwards the images of this run are removed. Every run builds its
+        # own <project>-<service> images, and no later run uses them by name;
+        # without this the runner disk filled up within about a day. This has
+        # to happen after cleanup-job-home.sh: containers that are not part of
+        # a compose project (e.g. the pgbackrest one) are only removed there
+        # and would otherwise keep their image. Found by name, not through
+        # "compose down --rmi": after the tests' own "odoo down -v" compose
+        # finds no container to map the images from. No --force: an image
+        # that still has a container stays and only produces a warning.
         if: always() && env.ZEBROO_JOB_HOME != ''
         shell: bash
         working-directory: ${{ runner.temp }}
@@ -230,3 +240,21 @@ jobs:
             exit 0
           fi
           bash "$script" "$ZEBROO_JOB_HOME"
+          if ! docker info >/dev/null 2>&1; then
+            echo "::warning::docker not reachable, images of this run stay"
+            exit 0
+          fi
+          suffix="${GITHUB_RUN_ID: -5}"
+          mapfile -t images < <(
+            docker image ls --format '{{.Repository}}:{{.Tag}}' \
+              | grep -E "^(bake[0-9]+|zpt19|zptpgbr)${suffix}-[a-z0-9_.-]+:" | sort -u
+          )
+          if ((${#images[@]} == 0)); then
+            echo "no images of run $GITHUB_RUN_ID left"
+            exit 0
+          fi
+          echo "removing ${#images[@]} images of run $GITHUB_RUN_ID"
+          for image in "${images[@]}"; do
+            docker image rm "$image" >/dev/null \
+              || echo "::warning::image $image stays (still in use?)"
+          done
