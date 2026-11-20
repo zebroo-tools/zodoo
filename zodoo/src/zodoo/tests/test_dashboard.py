@@ -97,6 +97,9 @@ def test_logs_list_reaches_back():
 def test_loki_queries_span_retention():
     conf = (REPO_ROOT / "dashboard" / "config" / "loki-config.yml").read_text()
     assert "max_query_length: ${DASHBOARD_LOKI_RETENTION}" in conf
+    # Without the lookback a range longer than the retention ("This year")
+    # is still rejected with HTTP 400 - seen on 3DM with v12.11.1.
+    assert "max_query_lookback: ${DASHBOARD_LOKI_RETENTION}" in conf
 
 
 def test_odoo_run_sets_werkzeug_level():
