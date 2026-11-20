@@ -1,3 +1,0 @@
-type: internal
-description: "CI: der Bake-Test entfernt am Ende die Images seines eigenen Laufs, damit sie die Platte des gemeinsamen Runners nicht mehr füllen"
-breaking: false
