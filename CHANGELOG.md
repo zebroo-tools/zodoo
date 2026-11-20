@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.12.6
+
+- **Fix**: Logs dashboard: time ranges longer than the Loki retention ("This year", "Last 5 years") no longer fail with "query time range exceeds the limit"; Loki cuts them at the retention. To check: open /logs, pick "This year" - the log list and the volume chart show data instead of an error.
+
+
 ## 12.12.5
 
 - **Fix**: Offsite-Filestore: auch ein Lauf ohne neue Anhänge hängt eine Manifestzeile an, damit der 48-h-Alarm auf dem Backup-Server nicht bei ruhigen Instanzen feuert
