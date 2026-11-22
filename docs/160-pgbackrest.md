@@ -7,12 +7,12 @@ window rather than to last night's dump.
 This replaces the earlier barman integration. The two solve the same problem and
 differ in one structural way that explains everything else on this page:
 
-| | barman (removed) | pgBackRest |
-| --- | --- | --- |
-| WAL capture | **streamed** (`pg_receivewal` against a replication slot) | **archived** (`archive_command`) |
-| Runs inside the postgres container | nothing | the `archive_command`, so the binary lives there |
-| Incremental granularity | whole files (rsync hardlinks) | **8 KiB pages** (block incremental) |
-| Expiry | `retention_policy`, applied by barman's cron | part of every backup run |
+|                                    | barman (removed)                                          | pgBackRest                                       |
+| ---------------------------------- | --------------------------------------------------------- | ------------------------------------------------ |
+| WAL capture                        | **streamed** (`pg_receivewal` against a replication slot) | **archived** (`archive_command`)                 |
+| Runs inside the postgres container | nothing                                                   | the `archive_command`, so the binary lives there |
+| Incremental granularity            | whole files (rsync hardlinks)                             | **8 KiB pages** (block incremental)              |
+| Expiry                             | `retention_policy`, applied by barman's cron              | part of every backup run                         |
 
 The page-level incrementals are the reason for the switch: postgres already
 knows which pages changed, so nothing has to be rediscovered by hashing a byte
@@ -28,10 +28,10 @@ two calls with a human in between.
 
 Nothing, in the normal case. Both addresses are reachable from the internet:
 
-| Address | Purpose |
-| ------- | ------- |
+| Address                         | Purpose                                                 |
+| ------------------------------- | ------------------------------------------------------- |
 | `enroll.backup.zebroo.de` (443) | the enrolment service - ordinary HTTPS behind the proxy |
-| `db.backup.zebroo.de` (443) | the repository - pgBackRest's own protocol, own address |
+| `db.backup.zebroo.de` (443)     | the repository - pgBackRest's own protocol, own address |
 
 They are reached differently on purpose. The enrolment service speaks HTTP, so
 it sits behind the same proxy as every other site and carries a publicly issued
@@ -72,15 +72,15 @@ happens next.
 
 Three ways, same effect - they run the same code on the backup server:
 
-* **In the mask.** An admin opens `https://enroll.backup.zebroo.de/`, checks
+- **In the mask.** An admin opens `https://enroll.backup.zebroo.de/`, checks
   the name against the customer, and approves.
-* **On the backup server.** `pgbackrest-enroll list`, then
+- **On the backup server.** `pgbackrest-enroll list`, then
   `pgbackrest-enroll approve <id> --projekt <nr>`. For whoever has a shell
   there but no browser inside the VPN.
-* **Right here.** `odoo pgbackrest register --approve` asks for the enrolment
+- **Right here.** `odoo pgbackrest register --approve` asks for the enrolment
   secret - only Zebroo has it - and approves this machine's own request on the
   spot. It needs the pickup token that was written when the request was filed,
-  so it can only ever approve *this* request, not somebody else's.
+  so it can only ever approve _this_ request, not somebody else's.
 
 Only in that moment do the client certificate and the passphrase come into
 existence, and they are shown exactly once.
@@ -105,11 +105,11 @@ odoo pgbackrest register
 
 The same command again. This time it writes:
 
-* `ca.crt`, `client.crt` and `client.key` into `$HOST_RUN_DIR/pgbackrest/cert/`
+- `ca.crt`, `client.crt` and `client.key` into `$HOST_RUN_DIR/pgbackrest/cert/`
   (the key at 0600, which pgBackRest insists on)
-* `PGBR_STANZA`, `PGBR_REPO_HOST`, `PGBR_REPO_HOST_PORT`, `PGBR_CIPHER_TYPE`,
+- `PGBR_STANZA`, `PGBR_REPO_HOST`, `PGBR_REPO_HOST_PORT`, `PGBR_CIPHER_TYPE`,
   `PGBR_CIPHER_PASS`, `PGBR_BACKUP_FROM` and `RUN_PGBACKREST` into the settings
-* the filestore stream as well, if the server issued one
+- the filestore stream as well, if the server issued one
 
 Handed out **exactly once**. A second call answers `delivered` and nothing
 else; from then on the copy that exists is the one in 1Password and at the
@@ -139,11 +139,11 @@ differential the rest of the week (`PGBR_FULL_CRON`, `PGBR_DIFF_CRON`).
 
 ### What you do not have to do
 
-* **Set retention.** `register` leaves the documented default in place
-  (14 days, time-based). Where it is *enforced* depends on who holds the
+- **Set retention.** `register` leaves the documented default in place
+  (14 days, time-based). Where it is _enforced_ depends on who holds the
   passphrase - see below.
-* **Set `RUN_PGBACKREST`.** `register` does it.
-* **Create the stanza.** The sidecar does it on startup.
+- **Set `RUN_PGBACKREST`.** `register` does it.
+- **Create the stanza.** The sidecar does it on startup.
 
 ### Several projects on one machine
 
@@ -152,7 +152,7 @@ stanza (the project name), so they never mix - not locally, and not in a shared
 repository on the backup server, where `tls-server-auth` binds each certificate
 to exactly its stanza.
 
-What is *not* separated automatically is the load. All projects inherit the
+What is _not_ separated automatically is the load. All projects inherit the
 same cron times, so ten projects start ten backups at 02:00, each with
 `PGBR_PROCESS_MAX` processes. On a dense machine, stagger them and lower the
 parallelism:
@@ -178,7 +178,7 @@ odoo setting PGBR_PROCESS_MAX=2
 Two shared mounts, and neither is a convenience:
 
 - **PGDATA**, because pgbackrest reads the data directory directly.
-- **the socket directory**, because pgbackrest has *no option* to reach postgres
+- **the socket directory**, because pgbackrest has _no option_ to reach postgres
   over TCP. `pg1-host` means "run the pgbackrest process on that remote
   machine", not "connect libpq there" — since it must read PGDATA anyway, it
   always considers itself co-located with the cluster. Inside a compose stack
@@ -206,13 +206,13 @@ the backup server. **Who drives the backup** is then a second decision,
 `PGBR_BACKUP_FROM`, and it decides both the firewall shape and where
 retention is configured.
 
-| | `here` (default) | `repo-host` |
-| --- | --- | --- |
-| runs `backup` and `expire` | this machine | the backup server |
-| connections | **all outbound** | outbound WAL **plus inbound** on `PGBR_TLS_SERVER_PORT` |
-| open port on this machine | none | yes |
-| can this machine delete backups? | **yes** | no |
-| retention configured | **on this machine** | on the backup server |
+|                                  | `here` (default)    | `repo-host`                                             |
+| -------------------------------- | ------------------- | ------------------------------------------------------- |
+| runs `backup` and `expire`       | this machine        | the backup server                                       |
+| connections                      | **all outbound**    | outbound WAL **plus inbound** on `PGBR_TLS_SERVER_PORT` |
+| open port on this machine        | none                | yes                                                     |
+| can this machine delete backups? | **yes**             | no                                                      |
+| retention configured             | **on this machine** | on the backup server                                    |
 
 **`repo-host` is the stronger shape.** This machine holds no repository
 passphrase, has no delete rights, and can only push WAL — stronger than an
@@ -225,11 +225,11 @@ default because a misconfigured `repo-host` fails silently until backup time.
 > so it cannot run in that mode: it carries no `pg1-host` for any stanza, and —
 > more to the point — **no `repo1-cipher-pass`**. Pulling requires the repo host
 > to decrypt, and refusing it that ability is the whole design. Both instances
-> therefore run `BACKUP_FROM=here`. Read the `repo-host` column as *what
-> pgbackrest and zodoo support*, not as an option that is one setting away.
-The delete rights it hands this machine are only acceptable if something
-downstream keeps a copy the machine cannot reach — see *Where the protection
-lives* below.
+> therefore run `BACKUP_FROM=here`. Read the `repo-host` column as _what
+> pgbackrest and zodoo support_, not as an option that is one setting away.
+> The delete rights it hands this machine are only acceptable if something
+> downstream keeps a copy the machine cannot reach — see _Where the protection
+> lives_ below.
 
 Either way the certificate in `$HOST_RUN_DIR/pgbackrest/cert/` is an
 **identity**, not a key: it proves who may write, and opens nothing.
@@ -242,11 +242,11 @@ signed by the same CA cannot back up somebody else's instance.
 client. That single fact decides where retention can run at all — and it comes
 out differently for the two `BACKUP_FROM` modes:
 
-| | `here` (pushed) | `repo-host` (pulled) |
-| --- | --- | --- |
-| who holds the repository passphrase | this machine | the backup server |
-| who can therefore run `expire` | **this machine** | the backup server |
-| where `repo1-retention-*` is rendered | **here** | on the backup server |
+|                                       | `here` (pushed)  | `repo-host` (pulled) |
+| ------------------------------------- | ---------------- | -------------------- |
+| who holds the repository passphrase   | this machine     | the backup server    |
+| who can therefore run `expire`        | **this machine** | the backup server    |
+| where `repo1-retention-*` is rendered | **here**         | on the backup server |
 
 With `BACKUP_FROM=here` the backup server is a TLS storage endpoint and
 nothing more. It never sees the passphrase — that is the point of the shape —
@@ -258,8 +258,8 @@ Retention therefore belongs in this machine's own configuration, and
 pgBackRest appends an `expire` to every backup anyway; it simply needs a rule
 to apply. `PGBR_RETENTION_*` is rendered here for exactly that reason.
 
-**This was the other way round until 31.08.2026.** The rule then was *the
-machine that manages the disk manages the retention*, which sounds right and
+**This was the other way round until 31.08.2026.** The rule then was _the
+machine that manages the disk manages the retention_, which sounds right and
 does not work: the backup server cannot read the file it would have to
 evaluate. The consequence was that expire ran **nowhere** — configured on
 neither side, a cleanup that existed on paper only, with the repository
@@ -277,7 +277,7 @@ pgbackrest --stanza=<stanza> expire
 against the repository whether or not `repo1-retention-*` appears in its
 configuration; tried on 06.09.2026, it completes. What actually protects the
 history against a compromised instance is the **immutable second store**
-(object lock), not a missing config line — see *Where the protection lives*.
+(object lock), not a missing config line — see _Where the protection lives_.
 
 `PGBR_RETENTION_*` applies to a local repository and to `BACKUP_FROM=here`.
 Only with `BACKUP_FROM=repo-host`, where this machine holds no passphrase and
@@ -289,11 +289,11 @@ Since 07.09.2026 the backup server **decides** the retention, even though the
 instance **executes** it. `PGBR_RETENTION_FULL` is therefore a wish, and the
 precedence when the configuration is rendered is:
 
-| | |
-| --- | --- |
-| 1. | `PGBR_RETENTION_FULL_EFFECTIVE` — what the server said |
-| 2. | `PGBR_RETENTION_FULL` — the wish |
-| 3. | the documented default (14 days) |
+|     |                                                        |
+| --- | ------------------------------------------------------ |
+| 1.  | `PGBR_RETENTION_FULL_EFFECTIVE` — what the server said |
+| 2.  | `PGBR_RETENTION_FULL` — the wish                       |
+| 3.  | the documented default (14 days)                       |
 
 Deliberately in that order and **not** the larger of the two: otherwise a high
 wish could outbid the policy and the server would be back to not deciding.
@@ -321,7 +321,7 @@ says so instead of failing quietly, and the cron entry is cleared rather than
 failing weekly.
 
 > **The one thing to actually check:** if the backup server has no scheduled
-> `expire`, *nothing* expires — the Odoo side no longer does it and the backup
+> `expire`, _nothing_ expires — the Odoo side no longer does it and the backup
 > server was never asked to. The repository then grows until the disk is full.
 > This is a real trade for having one source of truth, and it is the same
 > failure mode that let a dump directory reach 3.4 TB.
@@ -352,17 +352,17 @@ are easy to miss:
 The repo-host topology needs **two connections in opposite directions**, which
 is the part worth knowing before writing a firewall rule:
 
-| direction | carries | port setting | when |
-| --- | --- | --- | --- |
-| this machine → backup server | WAL, and with `BACKUP_FROM=here` the backups too | `PGBR_REPO_HOST_PORT` | always |
-| backup server → **this machine** | the base backup — the repo host pulls | `PGBR_TLS_SERVER_PORT` | only `BACKUP_FROM=repo-host` |
+| direction                        | carries                                          | port setting           | when                         |
+| -------------------------------- | ------------------------------------------------ | ---------------------- | ---------------------------- |
+| this machine → backup server     | WAL, and with `BACKUP_FROM=here` the backups too | `PGBR_REPO_HOST_PORT`  | always                       |
+| backup server → **this machine** | the base backup — the repo host pulls            | `PGBR_TLS_SERVER_PORT` | only `BACKUP_FROM=repo-host` |
 
 The inbound one surprises people. It is not an accident: the repo host runs
 `pgbackrest backup` precisely so that this machine never touches the
 repository. `BACKUP_FROM=here` removes that direction entirely.
 
 Both ports are freely settable, so **443 on either side is fine** and is the
-usual answer to a firewall that only lets 443 out. What it does *not* do is turn
+usual answer to a firewall that only lets 443 out. What it does _not_ do is turn
 this into HTTPS:
 
 > pgBackRest speaks **its own protocol inside TLS**, not HTTP inside TLS, and it
@@ -395,21 +395,21 @@ The defaults are a **weekly full plus daily differentials**, not a nightly full.
 At roughly 16 GiB per full for a 45 GiB database, a nightly full is 5.8 TiB a
 year for a single instance.
 
-| Setting | Default | |
-| --- | --- | --- |
-| `PGBR_FULL_CRON` | `0 2 * * 0` | Sunday — the quietest day, so the cheapest slot |
-| `PGBR_DIFF_CRON` | `0 2 * * 1-6` | daily |
-| `PGBR_INCR_CRON` | *(empty)* | opt-in, intra-day |
-| `PGBR_RETENTION_FULL` | `14` | with `..._TYPE=time`: days of continuous PITR |
-| `PGBR_RETENTION_ARCHIVE` | *(empty)* | empty = continuous WAL across the whole window |
+| Setting                  | Default       |                                                 |
+| ------------------------ | ------------- | ----------------------------------------------- |
+| `PGBR_FULL_CRON`         | `0 2 * * 0`   | Sunday — the quietest day, so the cheapest slot |
+| `PGBR_DIFF_CRON`         | `0 2 * * 1-6` | daily                                           |
+| `PGBR_INCR_CRON`         | _(empty)_     | opt-in, intra-day                               |
+| `PGBR_RETENTION_FULL`    | `14`          | with `..._TYPE=time`: days of continuous PITR   |
+| `PGBR_RETENTION_ARCHIVE` | _(empty)_     | empty = continuous WAL across the whole window  |
 
 **Diff rather than incr for the daily rhythm** is deliberate: a differential
 depends only on the full, an incremental on its predecessor. A chain of six
 incrementals has to be read end to end on restore, and one damaged link takes
 its successors with it. With block-level incrementals a diff costs barely more.
 
-Intra-day incrementals do not improve the recovery *point* — the WAL archive
-already gives every second. They shorten the recovery *time*, because less WAL
+Intra-day incrementals do not improve the recovery _point_ — the WAL archive
+already gives every second. They shorten the recovery _time_, because less WAL
 has to be replayed, and replay is single-threaded.
 
 ### The WAL retention lever
@@ -422,8 +422,8 @@ own end point.
 That is how to keep old states without paying for the gaps between them.
 
 These apply to a local repository and to `BACKUP_FROM=here`. Only with
-`BACKUP_FROM=repo-host` do they move to the backup server — see *Retention
-lives wherever the passphrase lives*.
+`BACKUP_FROM=repo-host` do they move to the backup server — see _Retention
+lives wherever the passphrase lives_.
 
 ### Expiry is not a separate job
 
@@ -445,7 +445,7 @@ When WAL cannot be shipped — the backup server is down, the network is out,
 a certificate expired — segments pile up in the spool directory. Once the pile
 passes this size, pgbackrest **throws the whole queue away and reports success
 to postgres**. Archiving continues from the next segment as if nothing had
-happened. The backup keeps looking healthy; what is gone is the *chain*, and
+happened. The backup keeps looking healthy; what is gone is the _chain_, and
 with it point-in-time recovery, until the next base backup exists.
 
 That trade is pgbackrest's own and it is defensible: better to drop the backup
@@ -501,10 +501,10 @@ the backups are worth anything.
 `check` answers "does archiving work **now**". Neither of these does, and they
 answer different questions:
 
-| | what it does | what it finds |
-| --- | --- | --- |
-| `verify` | brings a backup up as a real postgres and reads from it | a backup that cannot actually be restored |
-| `repo-verify` | reads the stored bytes without restoring | gaps in the WAL chain, damaged blocks in older backups |
+|               | what it does                                            | what it finds                                          |
+| ------------- | ------------------------------------------------------- | ------------------------------------------------------ |
+| `verify`      | brings a backup up as a real postgres and reads from it | a backup that cannot actually be restored              |
+| `repo-verify` | reads the stored bytes without restoring                | gaps in the WAL chain, damaged blocks in older backups |
 
 `verify` also fails when the newest backup is **too old** — by default more than
 36 hours after it finished. A backup that restores fine but is from the day
@@ -539,6 +539,16 @@ if 3 hours is not enough; it must be greater than 1800 (pgBackRest's
 `db-timeout`), otherwise the area fails with "protocol_timeout … ungueltig"
 before pgBackRest starts.
 
+`repo-verify` itself may read one area for 4 hours (14400 s) by default. A
+large area on a slow store needs longer — one area on a NAS took 14003 s and
+the next week ran into the limit, which marks the area as failed although
+nothing is wrong with the stored backups. Set `repo_verify_timeout` (seconds)
+for that area in `stanzas`. Each bench config file is one store, so the value
+can differ between the primary and the secondary store. Keep it above
+`protocol_timeout`, so that pgBackRest reports its own error first. It must be
+whole seconds greater than zero, like `restore_timeout`; anything else fails
+the area with "repo_verify_timeout … ungueltig" before anything is read.
+
 A hard abort — SIGKILL, the OOM killer, a reboot — skips the cleanup and leaves
 no note. So every probe first looks for `verify_*` volumes older than 12 hours
 and lists them as `leftovers` in its proof file (and in yellow after the
@@ -553,12 +563,12 @@ Two traps in `repo-verify`, both learned the hard way:
 - **`pgbackrest verify` exits 0 even when it found problems.** The verdict is
   in the output, not the exit code.
 - **A healthy repository produces no status line at all.** Code that waits for
-  `status: ok` declares every healthy repository broken. Read for *problems*.
+  `status: ok` declares every healthy repository broken. Read for _problems_.
 
 With `--log-level-console=detail` the WAL ranges appear in the log, and that is
 the real prize: **more than one range per `archiveId` means WAL is missing in
-between** — the only way to see a queue that was silently discarded (see *The
-one setting that can silently lose WAL*).
+between** — the only way to see a queue that was silently discarded (see _The
+one setting that can silently lose WAL_).
 
 ### Restoring
 
@@ -615,7 +625,7 @@ with a rented NFS share, where "nobody can get at it" is not an argument.
 ### Where the passphrase lives
 
 **On the Odoo machine, not on the backup server.** The pgBackRest guide is
-explicit that encryption is *always performed client-side*: the backup server
+explicit that encryption is _always performed client-side_: the backup server
 stores ciphertext and never learns the passphrase. So a compromised backup
 server - or a curious storage provider - gets nothing.
 
@@ -675,16 +685,16 @@ odoo reload && odoo up -d && odoo pgbackrest check
 
 Two properties are worth knowing:
 
-* **Handed out exactly once.** After delivery the server deletes the passphrase
+- **Handed out exactly once.** After delivery the server deletes the passphrase
   from its own state; a second call answers `delivered` and nothing else. If
   the machine loses it before `odoo reload`, it comes from 1Password - not from
   the backup server, which only ever stores ciphertext.
-* **Nothing has to be pinned.** The enrolment service carries a publicly issued
+- **Nothing has to be pinned.** The enrolment service carries a publicly issued
   certificate, so there is a chain to verify against. Our own CA still matters -
   but only for the repository connection, and it arrives with the credentials.
 
 The service also files an age-encrypted envelope of the credentials on the
-backup server. Encrypted against a *public* key whose private half is in
+backup server. Encrypted against a _public_ key whose private half is in
 1Password, so the server can write it but never read it - which is what makes
 it safe to attach to the project record in hosting.zebroo.de.
 
@@ -727,7 +737,7 @@ containers disagree — which is what happens when `PGBR_VERSION` changed and
 only one image was rebuilt.
 
 > **Upgrading:** change `PGBR_VERSION`, `odoo reload && odoo build postgres
-> pgbackrest`, and `apt install pgbackrest=<version>-*` on the backup server —
+pgbackrest`, and `apt install pgbackrest=<version>-*` on the backup server —
 > in one window. The repository format is stable across 2.x, so it is only the
 > binaries.
 
@@ -744,7 +754,7 @@ WARN: environment contains invalid option 'bundle'
 ```
 
 The ones that fail are the harmless half. `compress-type`, `process-max` and
-`archive-async` *are* valid options, and those silently override the
+`archive-async` _are_ valid options, and those silently override the
 configuration file. Hence `PGBR_*`. `RUN_PGBACKREST` and the `CRONJOB_PGBACKREST_*`
 entries do not collide and keep their names.
 

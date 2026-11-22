@@ -1721,7 +1721,8 @@ def test_a_restore_that_times_out_leaves_no_container_behind(monkeypatch):
 
 def test_containers_still_holding_the_volume_are_removed(monkeypatch):
     """Auch ein namenloser Hilfscontainer (chown, pg_controldata) darf das
-    Volume nicht festhalten - aufgeraeumt wird alles, was es eingehaengt hat."""
+    Volume nicht festhalten - aufgeraeumt wird alles, was es eingehaengt hat.
+    """
     docker = FakeDocker(haengt="restore")
     _probe_bis_zum_restore(monkeypatch, docker)
 
@@ -1811,7 +1812,9 @@ def test_the_containers_found_on_the_volume_are_the_ones_removed():
     Ohne das stuende ein namenloser Hilfscontainer weiter auf dem Volume, und
     `volume rm` scheiterte wie vor dem Fix.
     """
-    docker = FakeDocker(antworten={("ps", "-aq"): (0, "c0ffee01\nbeef0002\n", "")})
+    docker = FakeDocker(
+        antworten={("ps", "-aq"): (0, "c0ffee01\nbeef0002\n", "")}
+    )
     assert _aufraeumen(docker) is None
     reihenfolge = [a[:2] for a in docker.aufrufe]
     rm = docker.aufrufe[reihenfolge.index(("rm", "-f"))]
@@ -1819,7 +1822,9 @@ def test_the_containers_found_on_the_volume_are_the_ones_removed():
     assert ("volume=verify_kunde_abc",) == tuple(
         x for x in docker.aufrufe[0] if x.startswith("volume=")
     )
-    assert reihenfolge.index(("rm", "-f")) < reihenfolge.index(("volume", "rm"))
+    assert reihenfolge.index(("rm", "-f")) < reihenfolge.index(
+        ("volume", "rm")
+    )
 
 
 def test_dockers_own_reason_stays_in_the_note():
@@ -1845,7 +1850,9 @@ def test_dockers_own_reason_stays_in_the_note():
 
 def test_a_failing_container_search_is_noted():
     docker = FakeDocker(
-        antworten={("ps", "-aq"): (1, "", "Cannot connect to the Docker daemon")}
+        antworten={
+            ("ps", "-aq"): (1, "", "Cannot connect to the Docker daemon")
+        }
     )
     assert "Cannot connect to the Docker daemon" in _aufraeumen(docker)
 
@@ -1863,7 +1870,9 @@ def test_a_cleanup_that_blows_up_is_noted_and_keeps_the_result(monkeypatch):
 
 
 @pytest.mark.parametrize("wert", ["7200", -5, 0, True, None, 1.5])
-def test_an_invalid_restore_timeout_is_a_config_error(monkeypatch, tmp_path, wert):
+def test_an_invalid_restore_timeout_is_a_config_error(
+    monkeypatch, tmp_path, wert
+):
     """Ein Tippfehler in der Konfiguration ist kein Zeitablauf.
 
     "7200" als Text knallte erst mitten im Restore als TypeError, ein negativer
@@ -1909,7 +1918,10 @@ def test_old_leftovers_on_the_bench_are_reported(monkeypatch):
     junge = lp.arrow.get(JETZT - 1800).isoformat()  # laeuft parallel
     docker = FakeDocker(
         antworten=_volumes(
-            ["verify_powerhouse_cicd_395f35dcd6", "verify_zebroodo_1234567890"],
+            [
+                "verify_powerhouse_cicd_395f35dcd6",
+                "verify_zebroodo_1234567890",
+            ],
             {
                 "verify_powerhouse_cicd_395f35dcd6": VOR_TAGEN,
                 "verify_zebroodo_1234567890": junge,
@@ -1985,7 +1997,9 @@ def test_the_protocol_timeout_can_be_set_per_area(monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize("wert", ["7200", 1800, 600, 0, True, None, 1.5])
-def test_an_invalid_protocol_timeout_is_a_config_error(monkeypatch, tmp_path, wert):
+def test_an_invalid_protocol_timeout_is_a_config_error(
+    monkeypatch, tmp_path, wert
+):
     """pgBackRest verlangt protocol-timeout > db-timeout (1800 s).
 
     Sonst stiege es erst im Container aus - als Bestand "nicht durchgelaufen",
@@ -1999,12 +2013,67 @@ def test_an_invalid_protocol_timeout_is_a_config_error(monkeypatch, tmp_path, we
     for f in ("ca.crt", "client.crt", "client.key"):
         (cert / f).write_text("x")
     bench = dict(
-        BENCH, cert_dir=str(cert), stanzas={"gross": {"protocol_timeout": wert}}
+        BENCH,
+        cert_dir=str(cert),
+        stanzas={"gross": {"protocol_timeout": wert}},
     )
     erg = lp.run_repo_verify_bench(bench, "gross")
     assert gerufen == []
     assert erg["result"] == "failed"
     assert "protocol_timeout" in erg["error"]
+
+
+def _repo_verify_docker_timeouts(monkeypatch, tmp_path):
+    """Run repo-verify against a fake docker and record the verify timeout."""
+    zeiten = []
+    monkeypatch.setattr(lp.os, "chown", lambda *a, **kw: None)
+
+    def docker(*args, **kw):
+        if "verify" in args:
+            zeiten.append(kw.get("timeout"))
+        return mock.Mock(stdout=AUSGABE_SAUBER, stderr="", returncode=0)
+
+    monkeypatch.setattr(lp, "_docker", docker)
+    cert = tmp_path / "cert"
+    cert.mkdir()
+    for f in ("ca.crt", "client.crt", "client.key"):
+        (cert / f).write_text("x")
+    return zeiten, dict(BENCH, cert_dir=str(cert))
+
+
+def test_repo_verify_uses_the_default_timeout(monkeypatch, tmp_path):
+    """Without an entry an area keeps the former 4 h."""
+    zeiten, bench = _repo_verify_docker_timeouts(monkeypatch, tmp_path)
+    erg = lp.run_repo_verify_bench(bench, "kunde-a")
+    assert erg["result"] == "passed"
+    assert zeiten == [lp.REPO_VERIFY_TIMEOUT]
+    assert lp.REPO_VERIFY_TIMEOUT == 4 * STUNDE
+
+
+def test_the_repo_verify_timeout_can_be_set_per_area(monkeypatch, tmp_path):
+    """A large area on a slow store needs longer than the others.
+
+    In November 2026 one area took 14003 s on a NAS and then ran into the
+    fixed 4 h. Only that area gets more time, the others keep the default.
+    """
+    zeiten, bench = _repo_verify_docker_timeouts(monkeypatch, tmp_path)
+    bench["stanzas"] = {"gross": {"repo_verify_timeout": 8 * STUNDE}}
+    lp.run_repo_verify_bench(bench, "kunde-a")
+    lp.run_repo_verify_bench(bench, "gross")
+    assert zeiten == [lp.REPO_VERIFY_TIMEOUT, 8 * STUNDE]
+
+
+@pytest.mark.parametrize("wert", ["28800", 0, -1, True, None, 1.5])
+def test_an_invalid_repo_verify_timeout_is_a_config_error(
+    monkeypatch, tmp_path, wert
+):
+    """A typo must fail as a config error, not start a run of unknown length."""
+    zeiten, bench = _repo_verify_docker_timeouts(monkeypatch, tmp_path)
+    bench["stanzas"] = {"gross": {"repo_verify_timeout": wert}}
+    erg = lp.run_repo_verify_bench(bench, "gross")
+    assert zeiten == []
+    assert erg["result"] == "failed"
+    assert "repo_verify_timeout" in erg["error"]
 
 
 _RM = ("rm", "-f")
