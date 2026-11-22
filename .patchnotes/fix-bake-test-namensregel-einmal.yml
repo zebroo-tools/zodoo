@@ -1,0 +1,3 @@
+type: internal
+description: "Bake-Test: Die Namensregel für die Compose-Projekte und Images eines Laufs steht nur noch an einer Stelle im Workflow (CI_PROJECT_PREFIX_RE). Ein Unit-Test schlägt fehl, wenn die Tests ein Präfix verwenden, das die Aufräumschritte nicht erfassen. Das Changelog-Fragment zum Aufräumen der Lauf-Images ist jetzt deutsch und nennt, woran man die Wirkung sieht."
+breaking: false

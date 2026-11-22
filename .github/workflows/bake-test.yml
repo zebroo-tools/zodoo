@@ -49,6 +49,16 @@ jobs:
     timeout-minutes: 120
     env:
       ZODOO_BAKE_TEST_VERSIONS: ${{ inputs.versions || github.event.inputs.versions || '19.0' }}
+      # Prefixes of the compose projects the tests of this job create. Each
+      # name is <prefix><last 5 digits of GITHUB_RUN_ID>, built by
+      # ci_project_name() in zodoo/src/zodoo/tests/conftest.py (zpt19,
+      # zptpgbr) and test_bake.py (bake<version>). Both cleanup steps below
+      # read this one pattern; a new prefix in the tests must be added here,
+      # or its projects and images stay on the runner.
+      # These steps are the primary cleanup. A daily cron on the runner host
+      # removes left-over images with the same prefixes older than 48h; it is
+      # only a safety net for runs that never reached these steps.
+      CI_PROJECT_PREFIX_RE: "bake[0-9]+|zpt19|zptpgbr"
     steps:
       - name: Isolate job home and tools
         shell: bash
@@ -203,7 +213,7 @@ jobs:
               docker ps -a --format '{{.Label "com.docker.compose.project"}}'
               docker network ls --format '{{.Label "com.docker.compose.project"}}'
               docker volume ls --format '{{.Label "com.docker.compose.project"}}'
-            } | grep -E "^(bake[0-9]+|zpt19|zptpgbr)${suffix}\$" | sort -u
+            } | grep -E "^(${CI_PROJECT_PREFIX_RE})${suffix}\$" | sort -u
           )
           if ((${#projects[@]} == 0)); then
             echo "no compose projects of run $GITHUB_RUN_ID left"
@@ -247,7 +257,7 @@ jobs:
           suffix="${GITHUB_RUN_ID: -5}"
           mapfile -t images < <(
             docker image ls --format '{{.Repository}}:{{.Tag}}' \
-              | grep -E "^(bake[0-9]+|zpt19|zptpgbr)${suffix}-[a-z0-9_.-]+:" | sort -u
+              | grep -E "^(${CI_PROJECT_PREFIX_RE})${suffix}-[a-z0-9_.-]+:" | sort -u
           )
           if ((${#images[@]} == 0)); then
             echo "no images of run $GITHUB_RUN_ID left"
