@@ -1,5 +1,1 @@
-CI only: the bake test now removes the images of its own run at the end
-(`bake<run>-*`, `zpt19<run>-*`, `zptpgbr<run>-*`), also after a failed or
-cancelled run. Before, every run left its images on the shared runner daemon
-and the disk filled up within about a day. Images that still have a container
-are kept with a warning.
+Nur CI: Der Bake-Test entfernt am Ende die Images seines eigenen Laufs (`bake<lauf>-*`, `zpt19<lauf>-*`, `zptpgbr<lauf>-*`), auch nach einem fehlgeschlagenen oder abgebrochenen Lauf. Vorher blieben die Images jedes Laufs auf dem gemeinsamen Runner liegen, und die Platte lief innerhalb etwa eines Tages voll. Prüfen: Im Schritt „Remove job home“ steht am Ende „removing N images of run …“. Die Warnung „image … stays (still in use?)“ heißt, dass noch ein Container das Image nutzt; es bleibt dann erhalten.
