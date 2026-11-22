@@ -979,13 +979,20 @@ VERIFY_RESTORE_TIMEOUT = 3600
 # (1830 s), gibt der Repo-Host auf ("timeout after 1860000ms waiting for
 # read", beim Pruefstand als "TLS error ... unexpected eof"). So brach die
 # Bestandspruefung von powerhouse_cicd am 11. und 18.10.2026 ab. Unterhalb
-# der 4 h, die der docker-Aufruf von repo-verify bekommt, damit pgBackRest
+# von REPO_VERIFY_TIMEOUT (docker-Aufruf von repo-verify), damit pgBackRest
 # seinen eigenen Fehler meldet und nicht nur der Docker-Client abbricht.
 # Muss groesser sein als db-timeout (Standard 1800 s), sonst verweigert
 # pgBackRest den Start. Je Bereich ueberschreibbar (Pruefstand:
 # "protocol_timeout" in stanzas).
 VERIFY_PROTOCOL_TIMEOUT = 3 * 3600
 VERIFY_DB_TIMEOUT = 1800
+
+# How long `repo-verify` may read one area before the docker client gives up.
+# Large areas on a slow store need more: in November 2026 one area on a NAS
+# took 14003 s and then hit the former fixed 4 h. Overridable per area on the
+# bench ("repo_verify_timeout" in stanzas). Keep it above protocol_timeout, so
+# that pgBackRest reports its own error before the docker client aborts.
+REPO_VERIFY_TIMEOUT = 4 * 3600
 
 # Ab wann ein fremdes verify_*-Volume als liegengeblieben gilt. Juenger kann es
 # die Probe sein, die gerade daneben laeuft (der Pruefstand faehrt zwei
@@ -1758,6 +1765,21 @@ BENCH_PFLICHTFELDER_S3 = (
 )
 
 
+def _seconds_setting(bench, key, default, stanza):
+    """A per-area time limit from the bench config, in whole seconds > 0.
+
+    An invalid value fails as a config error before anything runs.
+    """
+    wert = bench.get(key, default)
+    # bool is an int in Python - `true` would otherwise mean one second.
+    if isinstance(wert, bool) or not isinstance(wert, int) or wert <= 0:
+        raise VerifyFailed(
+            f"{key} fuer {stanza} ungueltig: {wert!r} "
+            "(erwartet: ganze Sekunden > 0)"
+        )
+    return wert
+
+
 def _protocol_timeout(bench, stanza):
     """protocol-timeout fuer die pgbackrest.conf des Pruefstands, geprueft.
 
@@ -2057,19 +2079,9 @@ def run_verify_bench(bench, stanza):
         umgebung["max_backup_age"] = eigen.get(
             "max_backup_age", VERIFY_MAX_BACKUP_AGE
         )
-        umgebung["restore_timeout"] = eigen.get(
-            "restore_timeout", VERIFY_RESTORE_TIMEOUT
+        umgebung["restore_timeout"] = _seconds_setting(
+            eigen, "restore_timeout", VERIFY_RESTORE_TIMEOUT, stanza
         )
-        # bool ist in Python ein int - `true` waere sonst eine Sekunde.
-        if (
-            isinstance(umgebung["restore_timeout"], bool)
-            or not isinstance(umgebung["restore_timeout"], int)
-            or umgebung["restore_timeout"] <= 0
-        ):
-            raise VerifyFailed(
-                f"restore_timeout fuer {stanza} ungueltig: "
-                f"{umgebung['restore_timeout']!r} (erwartet: ganze Sekunden > 0)"
-            )
     except VerifyFailed as ex:
         shutil.rmtree(arbeitsordner, ignore_errors=True)
         return {
@@ -2249,6 +2261,9 @@ def run_repo_verify_bench(bench, stanza):
     }
     try:
         eigen = _from_envelope(eigen, stanza)
+        timeout = _seconds_setting(
+            eigen, "repo_verify_timeout", REPO_VERIFY_TIMEOUT, stanza
+        )
         umgebung = _bench_environment(eigen, stanza, arbeitsordner)
         out = _docker(
             "run",
@@ -2263,7 +2278,7 @@ def run_repo_verify_bench(bench, stanza):
             # detail, weil erst auf dieser Stufe die WAL-Bereiche im Log
             # stehen - und damit die Luecken, um die es geht.
             "--log-level-console=detail",
-            timeout=14400,
+            timeout=timeout,
         )
         text = (out.stdout or "") + (out.stderr or "")
         urteil, meldungen, bereiche = _read_verify_output(text, stanza)

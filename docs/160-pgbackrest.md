@@ -539,6 +539,16 @@ if 3 hours is not enough; it must be greater than 1800 (pgBackRest's
 `db-timeout`), otherwise the area fails with "protocol_timeout … ungueltig"
 before pgBackRest starts.
 
+`repo-verify` itself may read one area for 4 hours (14400 s) by default. A
+large area on a slow store needs longer — one area on a NAS took 14003 s and
+the next week ran into the limit, which marks the area as failed although
+nothing is wrong with the stored backups. Set `repo_verify_timeout` (seconds)
+for that area in `stanzas`. Each bench config file is one store, so the value
+can differ between the primary and the secondary store. Keep it above
+`protocol_timeout`, so that pgBackRest reports its own error first. It must be
+whole seconds greater than zero, like `restore_timeout`; anything else fails
+the area with "repo_verify_timeout … ungueltig" before anything is read.
+
 A hard abort — SIGKILL, the OOM killer, a reboot — skips the cleanup and leaves
 no note. So every probe first looks for `verify_*` volumes older than 12 hours
 and lists them as `leftovers` in its proof file (and in yellow after the
