@@ -12,12 +12,16 @@ import ast
 import re
 from pathlib import Path
 
+import pytest
+
 TESTS_DIR = Path(__file__).resolve().parent
 WORKFLOW = TESTS_DIR.parents[3] / ".github" / "workflows" / "bake-test.yml"
 RUN_SUFFIX = "46509"
 
 
 def _workflow_pattern():
+    if not WORKFLOW.exists():
+        pytest.skip(f"{WORKFLOW} not present (installed package, not a checkout)")
     match = re.search(
         r'^\s*CI_PROJECT_PREFIX_RE:\s*"([^"]+)"\s*$',
         WORKFLOW.read_text(),
@@ -39,16 +43,34 @@ def _example(node):
     raise AssertionError(f"unsupported prefix expression: {ast.dump(node)}")
 
 
+def _call_name(func):
+    if isinstance(func, ast.Name):
+        return func.id
+    if isinstance(func, ast.Attribute):
+        return func.attr
+    return None
+
+
+def _prefix_arg(node, where):
+    """The prefix argument of a ci_project_name() call, positional or keyword."""
+    if len(node.args) >= 2:
+        return node.args[1]
+    keywords = {kw.arg: kw.value for kw in node.keywords}
+    if "ci_prefix" in keywords:
+        return keywords["ci_prefix"]
+    raise AssertionError(f"{where}: cannot read the prefix of this ci_project_name() call")
+
+
 def _test_prefixes():
     prefixes = set()
     for path in TESTS_DIR.glob("*.py"):
         for node in ast.walk(ast.parse(path.read_text())):
             if (
                 isinstance(node, ast.Call)
-                and getattr(node.func, "id", None) == "ci_project_name"
-                and len(node.args) == 2
+                and _call_name(node.func) == "ci_project_name"
             ):
-                prefixes.add((path.name, _example(node.args[1])))
+                where = f"{path.name}:{node.lineno}"
+                prefixes.add((path.name, _example(_prefix_arg(node, where))))
     return prefixes
 
 

@@ -57,7 +57,10 @@ jobs:
       # or its projects and images stay on the runner.
       # These steps are the primary cleanup. A daily cron on the runner host
       # removes left-over images with the same prefixes older than 48h; it is
-      # only a safety net for runs that never reached these steps.
+      # only a safety net for runs that never reached these steps. Its pattern
+      # is a copy of this one: the zebroo_ci_image_prune variable of the
+      # ansible-docker_host role (task 1610) in the runner's host vars. A new
+      # prefix belongs there too.
       CI_PROJECT_PREFIX_RE: "bake[0-9]+|zpt19|zptpgbr"
     steps:
       - name: Isolate job home and tools
