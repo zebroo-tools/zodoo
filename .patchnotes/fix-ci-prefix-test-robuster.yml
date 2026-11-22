@@ -1,3 +1,0 @@
-type: internal
-description: "Bake-Test: Der Test test_ci_project_prefixes.py erfasst ci_project_name() jetzt auch als Attribut-Aufruf und mit Schlüsselwortargumenten; eine Aufrufform, die er nicht auswerten kann, lässt ihn fehlschlagen statt sie zu übergehen. Fehlt die Workflow-Datei (installiertes Paket), wird er mit Begründung übersprungen. Prüfen: In zodoo/src `pytest zodoo/tests/test_ci_project_prefixes.py` ausführen, er ist grün."
-breaking: false

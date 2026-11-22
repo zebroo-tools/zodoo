@@ -1,5 +1,12 @@
 # Changelog
 
+## 12.12.8
+
+- **Internal**: Bake-Test: Die Namensregel für die Compose-Projekte und Images eines Laufs steht nur noch an einer Stelle im Workflow (CI_PROJECT_PREFIX_RE). Ein Unit-Test schlägt fehl, wenn die Tests ein Präfix verwenden, das die Aufräumschritte nicht erfassen. Prüfen: In zodoo/src `pytest zodoo/tests/test_ci_project_prefixes.py` ausführen; der Test ist grün und schlägt fehl, sobald ein Präfix aus ci_project_name() in CI_PROJECT_PREFIX_RE fehlt.
+- **Internal**: Bake-Test: Der Test test_ci_project_prefixes.py erfasst ci_project_name() jetzt auch als Attribut-Aufruf und mit Schlüsselwortargumenten; eine Aufrufform, die er nicht auswerten kann, lässt ihn fehlschlagen statt sie zu übergehen. Fehlt die Workflow-Datei (installiertes Paket), wird er mit Begründung übersprungen. Prüfen: In zodoo/src `pytest zodoo/tests/test_ci_project_prefixes.py` ausführen, er ist grün.
+- **Fix**: Bestandsprüfung (`odoo pgbackrest repo-verify --bench-config …`): Die Zeitgrenze je Bereich ist jetzt einstellbar. Standard bleibt 4 h (14400 s); auf dem Prüfstand in `stanzas.<bereich>.repo_verify_timeout` (ganze Sekunden > 0) für einen großen oder langsam gelesenen Bereich mehr setzen. Ungültige Werte lassen nur diesen Bereich mit „repo_verify_timeout … ungueltig“ durchfallen, bevor gelesen wird. Prüfen: `pytest zodoo/tests/test_pgbackrest_verify.py -k repo_verify` in zodoo/src ist grün.
+
+
 ## 12.12.7
 
 - **Internal**: CI: der Bake-Test entfernt am Ende die Images seines eigenen Laufs, damit sie die Platte des gemeinsamen Runners nicht mehr füllen

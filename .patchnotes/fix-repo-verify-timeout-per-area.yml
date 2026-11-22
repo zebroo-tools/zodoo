@@ -1,3 +1,0 @@
-type: fix
-description: "Bestandsprüfung (`odoo pgbackrest repo-verify --bench-config …`): Die Zeitgrenze je Bereich ist jetzt einstellbar. Standard bleibt 4 h (14400 s); auf dem Prüfstand in `stanzas.<bereich>.repo_verify_timeout` (ganze Sekunden > 0) für einen großen oder langsam gelesenen Bereich mehr setzen. Ungültige Werte lassen nur diesen Bereich mit „repo_verify_timeout … ungueltig“ durchfallen, bevor gelesen wird. Prüfen: `pytest zodoo/tests/test_pgbackrest_verify.py -k repo_verify` in zodoo/src ist grün."
-breaking: false
