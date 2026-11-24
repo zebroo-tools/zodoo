@@ -390,3 +390,35 @@ class TestPushUrl:
         mod.zodoo_registry_push_login(config, best_effort=True)
         with pytest.raises(mod.subprocess.CalledProcessError):
             mod.zodoo_registry_push_login(config)
+
+
+# --------------------------------------------------------------------------
+# Local image name rule shared with the prebuild CVE scan
+# --------------------------------------------------------------------------
+
+_SCAN_SCRIPT = (
+    __import__("pathlib").Path(__file__).resolve().parents[4]
+    / ".github"
+    / "scripts"
+    / "trivy-scan-images.sh"
+)
+
+
+def test_local_image_name_rule():
+    """zodoo-push uploads ``<project>-<service>``; the scan relies on it."""
+    config = _FakeConfig(project_name="prebuild-19_0")
+    assert (
+        mod._local_image_name(config, "postgres") == "prebuild-19_0-postgres"
+    )
+
+
+def test_scan_script_uses_same_image_name_rule():
+    """The prebuild scan copies the rule of ``_local_image_name``.
+
+    If one side changes, the scan would check another image than the one
+    zodoo-push uploads (it fails loudly then, but only in CI). Change
+    ``.github/scripts/trivy-scan-images.sh`` together with this rule.
+    """
+    if not _SCAN_SCRIPT.exists():
+        pytest.skip("scan script not part of this checkout")
+    assert 'image="${project}-${service}"' in _SCAN_SCRIPT.read_text()
