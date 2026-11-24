@@ -525,18 +525,23 @@ def _determine_requirements(config, yml, PYTHON_VERSION, settings, globals):
     #     (every new module / lib). Goes into the project layer as the
     #     final ARG-driven step so it does not invalidate the static
     #     zodoo-CLI install layers above it.
-    all_dependencies = _get_dependencies(config, globals, PYTHON_VERSION)
+    db_modules = _get_db_build_modules(settings)
+    all_dependencies = _get_dependencies(
+        config, globals, PYTHON_VERSION, db_modules=db_modules
+    )
     project_dependencies = _get_dependencies(
         config,
         globals,
         PYTHON_VERSION,
         exclude=(odoo_dir, "enterprise"),
+        db_modules=db_modules,
     )
     framework_dependencies = _get_dependencies(
         config,
         globals,
         PYTHON_VERSION,
         include=(odoo_dir, "enterprise"),
+        db_modules=db_modules,
     )
 
     # add static requirements (project-local pins from requirements.static):
@@ -687,8 +692,57 @@ def cache_dir(tools):
     return path
 
 
+def _get_db_build_dbnames(settings):
+    """Databases whose installed modules decide the image's Python packages.
+
+    Empty list = lookup disabled (PYTHON_DEPS_FROM_DB=0).
+    """
+    if str(settings.get("PYTHON_DEPS_FROM_DB", "1")) != "1":
+        return []
+    dbnames = settings.get("PYTHON_DEPS_DBS") or settings.get("DBNAME") or ""
+    return sorted({x.strip() for x in dbnames.split(",") if x.strip()})
+
+
+def _get_db_build_modules(settings):
+    """Modules installed in the project database(s), with diagnostics.
+
+    These modules go into the image even when they are not on the MANIFEST
+    install list, so that a module installed through the UI keeps its Python
+    packages after the next build. A database that cannot be read (no
+    postgres, fresh project) falls back to the MANIFEST and says so.
+    """
+    from zodoo.module_tools import collect_build_modules_from_dbs
+
+    dbnames = _get_db_build_dbnames(settings)
+    if not dbnames:
+        return set()
+    found, missing_source, unreadable = collect_build_modules_from_dbs(dbnames)
+    for dbname, reason in sorted(unreadable.items()):
+        click.secho(
+            f"Python packages: could not read the installed modules of "
+            f"database {dbname!r} ({reason}). Only the MANIFEST install list "
+            "is used for it.",
+            fg="yellow",
+        )
+    for name, dbs in sorted(missing_source.items()):
+        click.secho(
+            f"Python packages: module {name!r} is installed in database(s) "
+            f"{', '.join(dbs)}, but its source code is in no addons path. "
+            "Its Python packages are missing in the image. Add its repository "
+            "to the MANIFEST addons_paths or uninstall the module.",
+            fg="red",
+            bold=True,
+        )
+    return found
+
+
 def _get_dependencies(
-    config, globals, PYTHON_VERSION, exclude=None, include=None
+    config,
+    globals,
+    PYTHON_VERSION,
+    exclude=None,
+    include=None,
+    db_modules=None,
 ):
     # fetch dependencies from odoo lib requirements
     # requirements from odoo framework
@@ -712,7 +766,9 @@ def _get_dependencies(
         return True
 
     # fetch the external python dependencies
-    modules = Modules.get_all_used_modules(include_uninstall=True)
+    modules = Modules.get_all_used_modules(
+        include_uninstall=True, db_modules=db_modules
+    )
     modules = list(sorted(set(modules) | set(MINIMAL_MODULES or [])))
     if exclude:
         modules = [x for x in modules if not_excluded(x)]

@@ -91,6 +91,15 @@ level via the command line of the running roles.
 | `NAMED_ODOO_POSTGRES_VOLUME` | —         | Use a named external volume (not deleted with `down -v`). |
 | `DB_SSLMODE`                 | `disable` | PostgreSQL SSL mode.                                      |
 
+## Python packages of installed modules
+
+| Setting               | Default | Description                                                                                                                                                                                                  |
+| --------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PYTHON_DEPS_FROM_DB` | `1`     | `1` = `odoo reload` reads the installed modules from the database and adds their Python packages to the image, also for modules that are not on the MANIFEST install list. `0` = MANIFEST install list only. |
+| `PYTHON_DEPS_DBS`     | empty   | Comma-separated databases to read. Empty = `DBNAME`. Several databases give the union of their modules.                                                                                                      |
+
+Details and rules: [MANIFEST → Python packages in the image](./080-manifest.md#python-packages-in-the-image).
+
 ## Queue Jobs
 
 | Setting                                    | Default  | Description                                       |

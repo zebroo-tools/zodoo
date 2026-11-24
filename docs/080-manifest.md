@@ -87,6 +87,40 @@ The `MANIFEST` file lives at the **project root** and controls which Odoo module
 | `odoo_dir`                 | Where the Odoo source is cloned (default: `odoo`).                                                                                                                                                                                                                                                                                                                                                                       |
 | `upgrade_path`             | Path to upgrade-utils for OpenUpgrade migrations.                                                                                                                                                                                                                                                                                                                                                                        |
 
+## Python packages in the image
+
+`odoo reload` collects the `external_dependencies` of these modules and writes
+them into the image requirements:
+
+1. The modules on the MANIFEST `install` (and `uninstall`) list.
+2. The modules installed in the project database (`PYTHON_DEPS_FROM_DB=1`,
+   default). This covers modules installed through the Apps menu that are not
+   on the MANIFEST list. States read: `installed`, `to upgrade`, `to remove`
+   and `to install`.
+3. All Odoo `depends` of these modules (transitive) and the matching
+   `auto_install` modules.
+
+Modules that are only available in an addons path add no packages.
+
+Rules:
+
+- **`to install`** counts. Odoo writes this state only after the Python
+  dependency check passed and rolls it back when an install fails, so a
+  `to install` in the database is a persistent state.
+- **No database access** (database missing, postgres not running, new
+  project): `odoo reload` prints a yellow hint per database and uses the
+  MANIFEST list only. Set `PYTHON_DEPS_FROM_DB=0` to build without a database
+  on purpose.
+- **Several databases**: list them in `PYTHON_DEPS_DBS`; the image gets the
+  union of their modules.
+- **Missing source code**: a module installed in a database but in no addons
+  path is reported in red with module name and database. The build continues,
+  because Odoo itself starts with missing modules, but the module's Python
+  packages are not in the image. Add its repository to `addons_paths` or
+  uninstall the module.
+- The package list is sorted before the requirements hash is built, so the
+  same input gives the same hash and the same image.
+
 ### Running Odoo from a non-standard directory
 
 By default the Odoo source is cloned into `odoo/` inside the project. Set
