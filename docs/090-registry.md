@@ -148,6 +148,55 @@ Do not confuse this with the `REGISTRY=1` setting above: that one rewrites all
 image references to `HUB_URL` and blocks local builds, which is meant for
 production systems and would break a development machine.
 
+### How the cache images get there: prebuild with CVE scan
+
+The CI workflow `Prebuild generic images`
+(`.github/workflows/prebuild-images.yml`) builds the project-independent
+`zodoo-*` images (postgres, proxy, cronjobs, …) and uploads them. Before
+anything is uploaded, every image is scanned for known vulnerabilities with
+[Trivy](https://trivy.dev):
+
+1. `odoo build --no-zodoo-push <services>` builds the images. Without the flag
+   `odoo build` would queue the upload itself, before any scan.
+2. `.github/scripts/trivy-scan-images.sh` scans exactly the local images that
+   `odoo zodoo-push` uploads (`<project>-<service>`). The log shows the image
+   ID of every scanned image; right before the push the script checks that the
+   IDs are still the same.
+3. `odoo zodoo-push <services>` uploads them.
+
+Trivy is a pinned release binary, checked against its SHA-256 before use
+(`TRIVY_VERSION` / `TRIVY_SHA256` in the workflow, overridable through the
+repository variables `ZODOO_PREBUILD_TRIVY_VERSION` and
+`ZODOO_PREBUILD_TRIVY_SHA256` — change both together).
+
+**Report.** The job summary shows a table per Odoo version: per image the
+number of CRITICAL, HIGH and MEDIUM findings, the fixable ones in brackets.
+The full reports (JSON and a readable table per image) are attached to the run
+as the artifact `trivy-reports` (kept 30 days).
+
+**Findings do not fail the job.** The scan reports, it does not block; a
+threshold is a separate decision.
+
+**A failing scan does (fail-closed).** If the vulnerability database cannot be
+downloaded, Trivy exits with an error, an image is missing or changed after the
+scan, the job fails and `odoo zodoo-push` does not run — nothing is uploaded.
+
+**Manual test run.** Start the workflow by hand (Actions → Prebuild generic
+images → Run workflow, or `gh workflow run prebuild-images.yml --ref <branch>`)
+with these inputs:
+
+| Input                | Default       | Effect                                                            |
+| -------------------- | ------------- | ----------------------------------------------------------------- |
+| `versions`           | `19.0,20.0`   | Odoo versions to build                                            |
+| `services`           | empty (= all) | Space-separated subset, e.g. `postgres`                           |
+| `push`               | on            | Off: build and scan only, `zodoo-push` is skipped                 |
+| `force_scan_failure` | off           | Makes the scan fail on purpose, to check that nothing is uploaded |
+
+Push and scheduled runs always use the defaults, so they always upload.
+
+Only the CI prebuild is scanned. Images that `odoo build` uploads from a
+developer or customer machine go to the registry without this scan.
+
 ---
 
 ## Self-signed certificates
