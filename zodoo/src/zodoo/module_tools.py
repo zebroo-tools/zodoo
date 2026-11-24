@@ -191,6 +191,87 @@ def _uninstall_only_module_names(include_uninstall):
     )
 
 
+# Module states that keep a module (and its Python packages) in the image.
+# A 'to install' read here was committed: Odoo checks a module's
+# external_dependencies before the install is committed and resets the
+# transient states when loading the registry fails (reset_modules_state), so
+# a state seen at build time is a persisted one, not a failed UI install.
+BUILD_DB_MODULE_STATES = ("installed", "to upgrade", "to remove", "to install")
+
+
+class DBModulesUnreadable(Exception):
+    """The module list of a database could not be read."""
+
+
+def read_build_modules_from_db(dbname, connect_timeout=5):
+    """Names of the modules in ``dbname`` whose state is a build state.
+
+    Raises DBModulesUnreadable when postgres or the database is not reachable
+    or the database has no module table yet.
+    """
+    import psycopg2
+    from .odoo_config import get_postgres_connection_params
+
+    try:
+        host, port, user, password = get_postgres_connection_params()
+        kwargs = {"dbname": dbname, "connect_timeout": connect_timeout}
+        for key, value in (
+            ("host", host),
+            ("port", port),
+            ("user", user),
+            ("password", password),
+        ):
+            if value:
+                kwargs[key] = str(value)
+        conn = psycopg2.connect(**kwargs)
+    except Exception as ex:
+        raise DBModulesUnreadable(str(ex).strip()) from ex
+    try:
+        with conn.cursor() as cr:
+            if not table_exists(cr, "ir_module_module"):
+                raise DBModulesUnreadable("no table ir_module_module")
+            cr.execute(
+                "select name from ir_module_module where state in %s",
+                (BUILD_DB_MODULE_STATES,),
+            )
+            return {row[0] for row in cr.fetchall()}
+    finally:
+        conn.close()
+
+
+def collect_build_modules_from_dbs(dbnames, reader=read_build_modules_from_db):
+    """Modules installed in any of ``dbnames`` (union over all databases).
+
+    Returns ``(found, missing_source, unreadable)``:
+
+    - ``found``: module names whose source is in an addons path,
+    - ``missing_source``: {module name: [dbnames]} - in a database, but no
+      source code; their Python packages cannot be determined,
+    - ``unreadable``: {dbname: reason} - databases that could not be read.
+    """
+    found, missing_source, unreadable = set(), {}, {}
+    for dbname in dbnames:
+        try:
+            names = reader(dbname)
+        except DBModulesUnreadable as ex:
+            unreadable[dbname] = str(ex)
+            continue
+        for name in sorted(names):
+            if name in found:
+                continue
+            try:
+                module = Module.get_by_name(name)
+            except (NotInAddonsPath, Module.IsNot, KeyError):
+                module = None
+            if module is None:
+                missing_source.setdefault(name, []).append(dbname)
+            else:
+                found.add(name)
+    for name in found:
+        missing_source.pop(name, None)
+    return found, missing_source, unreadable
+
+
 class DBModules:
     def __init__(self):
         pass
@@ -1019,13 +1100,20 @@ class Modules:
         return list(sorted(set(modules)))
 
     # @profile
-    def get_all_used_modules(self, include_uninstall=True):
+    def get_all_used_modules(self, include_uninstall=True, db_modules=None):
         """
         Returns all modules that are directly or indirectly
         (auto install, depends) installed.
+
+        ``db_modules``: names of modules installed in the project database(s)
+        (see collect_build_modules_from_dbs); they count like MANIFEST install
+        modules, including their dependencies.
         """
         result = set()
         modules = self.get_customs_modules(include_uninstall=include_uninstall)
+        known = {module.name for module in modules}
+        for name in sorted(set(db_modules or []) - known):
+            modules.append(Module.get_by_name(name))
         auto_install_modules = (
             self.get_filtered_auto_install_modules_based_on_module_list(
                 modules

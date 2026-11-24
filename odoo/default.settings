@@ -34,6 +34,13 @@ RUN_ZODOO=1
 
 SHA_IN_DOCKER=0
 
+# Python packages of modules installed in the database go into the image, also
+# when the module is not on the MANIFEST install list (e.g. installed via Apps).
+# PYTHON_DEPS_DBS: comma separated database names, empty = DBNAME.
+# PYTHON_DEPS_FROM_DB=0: MANIFEST only (e.g. images built without a database).
+PYTHON_DEPS_FROM_DB=1
+PYTHON_DEPS_DBS=
+
 DB_SSLMODE=disable
 
 
