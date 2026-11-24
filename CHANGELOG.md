@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.13.0
+
+- **Feature**: odoo reload: Python-Pakete von Modulen, die in der Datenbank installiert sind, kommen ins Image, auch ohne MANIFEST-Eintrag (PYTHON_DEPS_FROM_DB, PYTHON_DEPS_DBS).
+
+
 ## 12.12.8
 
 - **Internal**: Bake-Test: Die Namensregel für die Compose-Projekte und Images eines Laufs steht nur noch an einer Stelle im Workflow (CI_PROJECT_PREFIX_RE). Ein Unit-Test schlägt fehl, wenn die Tests ein Präfix verwenden, das die Aufräumschritte nicht erfassen. Prüfen: In zodoo/src `pytest zodoo/tests/test_ci_project_prefixes.py` ausführen; der Test ist grün und schlägt fehl, sobald ein Präfix aus ci_project_name() in CI_PROJECT_PREFIX_RE fehlt.
