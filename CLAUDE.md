@@ -88,7 +88,14 @@ odoo build <name> --no-zodoo-pull
 
 ### Test image changes locally
 
-Either `rsync -av --exclude='.git' ./ ~/.odoo/images/` or `export ODOO_IMAGES=$(pwd)`.
+Run `rsync -av --exclude='.git' ./ ~/.odoo/images/`.
+
+`export ODOO_IMAGES=$(pwd)` does **not** work: `config.dirs["images"]` is fixed
+to `~/.odoo/images` (`zodoo/src/zodoo/consts.py`, `default_dirs`) and no code
+reads `ODOO_IMAGES` from the environment. `odoo reload` even overwrites
+`ODOO_IMAGES` in the generated settings with that directory (`settings.py`). Everything zodoo loads from the images tree therefore comes
+from `~/.odoo/images`, for example `turndb2dev.sql` in `turn-into-dev`
+(`lib_turnintodev.py`).
 
 **Changed a `Dockerfile` or a file it `COPY`s? Run `odoo reload` before `odoo build`.**
 `odoo build` builds from the _generated_ Dockerfile under
