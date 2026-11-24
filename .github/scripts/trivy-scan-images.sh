@@ -37,6 +37,14 @@ shift 3
 	exit 1
 }
 : "${TRIVY_CACHE_DIR:?TRIVY_CACHE_DIR must be set}"
+# Project and service names become image names and file paths below: plain
+# names only, so nothing can pass an option or leave the report directory.
+for name in "$project" "$@"; do
+	if [[ ! "$name" =~ ^[a-z0-9_]+(-[a-z0-9_]+)*$ ]]; then
+		echo "::error::invalid project or service name: '$name'"
+		exit 1
+	fi
+done
 
 ids_file="$report_dir/scanned-image-ids.txt"
 
@@ -66,6 +74,18 @@ print(f"| {service} | `{image_id[:19]}` | " + " | ".join(cells) + " |")
 PY
 }
 
+strip_image_config() {
+	python3 - "$1" <<'PY'
+import json, sys
+path = sys.argv[1]
+with open(path) as fh:
+    report = json.load(fh)
+(report.get("Metadata") or {}).pop("ImageConfig", None)
+with open(path, "w") as fh:
+    json.dump(report, fh, indent=2)
+PY
+}
+
 scan() {
 	mkdir -p "$report_dir"
 	: >"$ids_file"
@@ -78,6 +98,10 @@ scan() {
 
 	local rows=() service image id tmp tar json
 	for service in "$@"; do
+		# Same rule as _local_image_name() in zodoo/src/zodoo/lib_zodoo_registry.py,
+		# which zodoo-push uses; zodoo has no command that prints these names.
+		# If that rule changes, change it here too (a mismatch fails the scan
+		# with "Image ... not found", never silently).
 		image="${project}-${service}"
 		if ! id="$(image_id "$image")"; then
 			echo "::error::Image $image not found, nothing to scan for service $service."
@@ -109,6 +133,10 @@ scan() {
 			exit 1
 		fi
 		rm -rf "$tmp"
+		# The reports are published as a workflow artifact of a public repo.
+		# Drop the image config (env variables, build history): the summary
+		# and the CVE list do not need it.
+		strip_image_config "$json"
 		trivy convert --quiet --format table --output "$report_dir/$service.txt" "$json"
 		rows+=("$(summarize "$service" "$id" "$json")")
 	done
