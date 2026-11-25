@@ -1,0 +1,3 @@
+type: feature
+description: "PostgreSQL 19 ist als Option wählbar: `odoo setting POSTGRES_VERSION=19`, danach `odoo reload` und `odoo build`. Der Standard bleibt 17. Alle Images mit Postgres-Client (pgbackrest, cronjobs, pgtools, Konsole) bekommen dann den passenden Client 19; vorher wäre bei unbekannten Versionen still Client 14 installiert worden. Ein nicht unterstützter Wert bricht den Build jetzt mit einer klaren Meldung ab. Ein Wechsel bestehender Datenbanken geht nur per Dump/Restore."
+breaking: false
