@@ -88,6 +88,19 @@ project name as shown by `odoo setup status`, not necessarily the folder name)
 and triggers reload. `-u` writes to `~/.odoo/settings`, `-s` to
 `/etc/odoo/settings`. Without the `=` the argument is only read.
 
+Reading takes one or more (partial) names, case-insensitive:
+`odoo setting port` shows every setting with `PORT` in its name. A name that
+matches nothing prints `<NAME>: nicht gesetzt`. An argument that cannot be a
+setting name (a number, `true`/`false`/`yes`/`no`, a path, special characters)
+stops with an error and writes nothing. This catches the missing `=`:
+
+```bash
+$ odoo setting ODOO_DEMO 1
+Kein gültiger Name einer Einstellung: 1
+Zum Schreiben braucht es ein '=' ohne Leerzeichen. Meintest du:
+  odoo setting ODOO_DEMO=1
+```
+
 ```bash
 odoo setting DEVMODE=1
 odoo setting PROXY_PORT=18069
