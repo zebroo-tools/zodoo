@@ -1,4 +1,7 @@
 FROM ubuntu:22.04 AS builder
+# Without this ARG the build arg from docker-compose.yml never reaches the
+# postgres snippet, which then always installs client 14.
+ARG POSTGRES_VERSION
 
 
 #___SNIPPET_APT_PROXY___

@@ -82,6 +82,46 @@ class TestServerDockerfile:
         assert "postgis.control" in content
 
 
+def _images_with_postgres_snippet():
+    return sorted(
+        path
+        for path in REPO_ROOT.glob("*/Dockerfile")
+        if any(
+            line.strip() == "#___SNIPPET_POSTGRES___"
+            for line in path.read_text().splitlines()
+        )
+    )
+
+
+def test_snippet_users_are_found():
+    names = {p.parent.name for p in _images_with_postgres_snippet()}
+    assert {"cronjobs", "pgbackrest", "pgtools"} <= names
+
+
+@pytest.mark.parametrize(
+    "dockerfile",
+    _images_with_postgres_snippet(),
+    ids=lambda p: p.parent.name,
+)
+def test_snippet_stage_declares_postgres_version_arg(dockerfile):
+    """docker-compose.yml passes POSTGRES_VERSION as build arg; a stage only
+    sees it after `ARG POSTGRES_VERSION`. Without it the switch reads an empty
+    value and installs client 14 whatever the server is."""
+    declared = False
+    for line in dockerfile.read_text().splitlines():
+        stripped = line.strip()
+        if stripped.upper().startswith("FROM "):
+            declared = False
+        elif stripped.startswith("ARG POSTGRES_VERSION"):
+            declared = True
+        elif stripped == "#___SNIPPET_POSTGRES___":
+            assert (
+                declared
+            ), f"{dockerfile}: snippet used before ARG POSTGRES_VERSION"
+            return
+    pytest.fail("snippet not found")
+
+
 def _client_switch_script():
     """The second RUN of the snippet as a plain shell script.
 

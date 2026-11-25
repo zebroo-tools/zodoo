@@ -94,8 +94,8 @@ level via the command line of the running roles.
 Supported values for `POSTGRES_VERSION`: `11`, `12`, `13`, `14`, `16`, `17`
 (default) and `19`. The value selects the server image (`postgres/Dockerfile.<n>`)
 and the client in every image that ships `psql`/`pg_dump` (pgbackrest,
-pgtools, cronjobs, console). Servers 11 to 14 get client 14, newer servers
-their own client. Any other value stops `odoo build` with an error.
+pgtools, cronjobs). Servers 11 to 14 get client 14, newer servers their own
+client. Any other value stops `odoo build` with an error.
 
 Changing the version of an existing database:
 
