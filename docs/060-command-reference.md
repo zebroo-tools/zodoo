@@ -86,7 +86,8 @@ services (proxy, cronjobs, …) only print a warning with the traceback.
 Set a project setting. Writes to `~/.odoo/settings.<projectname>` (the
 project name as shown by `odoo setup status`, not necessarily the folder name)
 and triggers reload. `-u` writes to `~/.odoo/settings`, `-s` to
-`/etc/odoo/settings`. Without the `=` the argument is only read.
+`/etc/odoo/settings`. Without the `=` the arguments are names to read, nothing
+is written.
 
 Reading takes one or more (partial) names, case-insensitive:
 `odoo setting port` shows every setting with `PORT` in its name. A name that
