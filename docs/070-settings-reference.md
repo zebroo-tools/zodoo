@@ -23,10 +23,10 @@ odoo setting -s <KEY>=<VALUE>       # system-level (/etc/odoo/settings)
 odoo setting <KEY>                  # read only
 ```
 
-`odoo setting <KEY> <VALUE>` (without `=`) writes nothing and stops with an
-error that shows the corrected command `odoo setting <KEY>=<VALUE>`.
+The `=` is required. `odoo setting <KEY> <VALUE>` (without `=`) writes nothing
+and stops with an error that shows the corrected command
+`odoo setting <KEY>=<VALUE>`.
 
-The `=` is required: `odoo setting DEVMODE 1` only reads `DEVMODE` and `1`.
 The project settings hang on the project name, so renaming the folder loses
 them, and two checkouts with the same folder name share them.
 
