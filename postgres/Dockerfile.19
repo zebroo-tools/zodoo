@@ -30,7 +30,9 @@ RUN #___SNIPPET_APT_INSTALL___ \
     #___SNIPPET_APT_INSTALL___ \
     postgresql-19-postgis-3 postgresql-19-pgvector "pgbackrest${PGBR_VERSION:+=${PGBR_VERSION}-*}" ncdu python3 && \
     apt-get purge -y git git-core gnupg gnupg2 binutils && \
-    (apt-get purge -y libgdal* libarmadillo* libogdi* libasan* libtsan* libubsan* || true) && \
+    # libgdal, libarmadillo and libogdi are runtime dependencies of postgis:
+    # purging them removes postgis again (as happens in Dockerfile.17).
+    (apt-get purge -y libasan* libtsan* libubsan* || true) && \
     apt-get purge -y build-essential gcc g++ libpq-dev postgresql-server-dev-19 python3-dev && \
     apt-get autoremove -y && \
     apt-get clean -y && \
@@ -77,3 +79,5 @@ RUN #___SNIPPET_APT_INSTALL___ \
 # auf einem Zweig, im selben Commit mal rot mal gruen) - und vorher eine echte
 # Instanz getroffen, deren Archivierung nach dem Bauen nie lief.
 RUN command -v pgbackrest && pgbackrest version
+# Fail the build if postgis got lost during cleanup.
+RUN test -f /usr/share/postgresql/19/extension/postgis.control

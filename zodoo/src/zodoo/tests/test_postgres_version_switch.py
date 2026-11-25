@@ -73,6 +73,13 @@ class TestServerDockerfile:
         assert "postgresql-19-pgvector" in content
         assert "pgbackrest version" in content
         assert "-17" not in content
+        # purging libgdal* takes postgis with it (see Dockerfile.17)
+        assert not any(
+            "purge" in line and "libgdal" in line
+            for line in content.splitlines()
+            if not line.lstrip().startswith("#")
+        )
+        assert "postgis.control" in content
 
 
 def _client_switch_script():
