@@ -1,0 +1,3 @@
+type: fix
+description: "odoo setting KEY VALUE (ohne =) bricht mit Fehlermeldung und Korrekturvorschlag ab statt still nichts zu schreiben; nicht gesetzte Schlüssel melden „nicht gesetzt“."
+breaking: false

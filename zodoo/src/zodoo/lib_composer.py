@@ -2110,14 +2110,50 @@ def _complete_setting_name(ctx, param, incomplete):
     return sorted(res)
 
 
+# A read argument is a (partial) setting name: letters, digits, underscore,
+# not starting with a digit. Lower case stays allowed for `odoo setting port`.
+_SETTING_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_SETTING_VALUE_WORDS = {"true", "false", "yes", "no"}
+
+
+def _is_setting_name(name):
+    return bool(_SETTING_NAME_RE.match(name)) and (
+        name.lower() not in _SETTING_VALUE_WORDS
+    )
+
+
+def _abort_invalid_setting_names(names):
+    """Stop when a read argument looks like a value, not like a key.
+
+    Without "=" every argument is a key to look up, so `odoo setting KEY 1`
+    used to read two keys and write nothing, without any message.
+    """
+    names = list(names)
+    invalid = [x for x in names if not _is_setting_name(x)]
+    if not invalid:
+        return
+    if len(names) == 2 and _is_setting_name(names[0]) and invalid == names[1:]:
+        hint = f"odoo setting {names[0]}={names[1]}"
+    else:
+        hint = "odoo setting KEY=VALUE"
+    abort(
+        f"Kein gültiger Name einer Einstellung: {', '.join(invalid)}\n"
+        f"Zum Schreiben braucht es ein '=' ohne Leerzeichen. Meintest du:\n"
+        f"  {hint}"
+    )
+
+
 @composer.command(
     help=(
         "Read or write settings. Pass KEY=VALUE to write, KEY alone to read. "
         "Without arguments shows all effective settings. "
         "Triggers reload after write unless --no-reload is set.\n\n"
         "Writing NEEDS the equals sign. Without it every argument is read as "
-        "a key to look up, so `odoo setting DEVMODE 1` reads two settings "
-        "and writes nothing - silently.\n\n"
+        "a key to look up. An argument that cannot be a key name (a number, "
+        "true/false/yes/no, a path, special characters) stops with an error "
+        "and the corrected command, so `odoo setting DEVMODE 1` suggests "
+        "`odoo setting DEVMODE=1` and writes nothing. A key that is not set "
+        "is reported as such.\n\n"
         "Examples:\n\n"
         "  odoo setting DEVMODE=1\n\n"
         "  odoo setting PROXY_PORT\n\n"
@@ -2155,13 +2191,13 @@ def setting(ctx, config, settings, no_reload, user_wide, system_wide):
             try:
                 key, value = setting.split("=", 1)
                 if mode and mode != "write":
-                    raise abort("Cannot  readonly and writeonly settings.")
+                    raise abort("Cannot mix reading and writing settings.")
                 mode = "write"
 
             except ValueError:
                 key = setting
                 if mode and mode != "readonly":
-                    raise abort("Cannot  readonly and writeonly settings.")
+                    raise abort("Cannot mix reading and writing settings.")
                 mode = "readonly"
                 settings_dict[key] = None
             key = key.strip()
@@ -2192,13 +2228,22 @@ def setting(ctx, config, settings, no_reload, user_wide, system_wide):
     _tune_settings()
 
     if mode == "readonly" or mode is None:
+        _abort_invalid_setting_names(settings_dict.keys())
+        found = set()
         if file or config.files.get("settings"):
             configparser = MyConfigParser(file or config.files["settings"])
             for k in sorted(configparser.keys()):
-                if any(
-                    name.lower() in k.lower() for name in settings_dict.keys()
-                ):
+                matches = {
+                    name
+                    for name in settings_dict.keys()
+                    if name.lower() in k.lower()
+                }
+                if matches:
+                    found |= matches
                     click.secho(f"{k}={configparser[k]}")
+        for name in settings_dict.keys():
+            if name not in found:
+                click.secho(f"{name}: nicht gesetzt", fg="yellow")
     elif mode == "write":
         for key, value in settings_dict.items():
             update_setting(
