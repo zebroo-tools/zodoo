@@ -32,7 +32,9 @@ def test_creates_sentinel_readable_for_proxy(tmp_path, capsys):
 
     p = _sentinel(tmp_path)
     assert p.exists()
-    # The proxy's nginx workers run as nobody and open the file for reading.
+    # The proxy only checks existence; keep the file empty like touch() did.
+    assert p.read_text() == ""
+    # The proxy's nginx workers are not root and open the file for reading.
     assert stat.S_IMODE(p.stat().st_mode) == 0o644
     assert "[warmup gate]" not in capsys.readouterr().out
 

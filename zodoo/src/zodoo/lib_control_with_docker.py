@@ -637,16 +637,21 @@ def _touch_proxy_warmup_gate(config):
     minutes. The sentinel is cleared automatically once the web role
     spawns again and finishes its warmup loop (signal_warmup_done in
     odoo/bin/tools.py). Never raises — projects without the bundled
-    proxy simply don't have the volume mounted."""
+    proxy simply don't have the volume mounted.
+
+    The name is kept from the former touch() implementation to keep the
+    callers unchanged."""
     try:
         p = config.dirs["run"] / "proxy_exchange" / "warmup_in_progress"
         # The odoo container (root) creates the same sentinel when the web
-        # role respawns. touch() on that root-owned 0644 file fails with
-        # EACCES for the host user. Write a new file and rename it over the
-        # old one instead: that only needs write access to the directory.
-        # The proxy's nginx workers run as nobody and must be able to open
-        # it, so keep 0644 (the mode touch() produced before).
-        atomic_write_text(p, "1", mode=0o644)
+        # role respawns. touch() on that root-owned file (no write bit for
+        # others) fails with EACCES for the host user. Write a new file and
+        # rename it over the old one instead: that only needs write access
+        # to the directory. The proxy only checks that the file exists, so
+        # it stays empty as before. Its nginx workers are not root (no
+        # `user` directive, so the default unprivileged user) and must be
+        # able to open it: keep 0644, the mode touch() gives with umask 022.
+        atomic_write_text(p, "", mode=0o644)
     except Exception as e:
         click.secho(f"[warmup gate] could not set {p}: {e}", fg="yellow")
 
