@@ -8,11 +8,11 @@ RUN if [ -e /usr/bin/apt-get ]; then \
     rm -Rf \
         /tmp/* /var/tmp/* /var/log/* \
         /usr/share/doc /usr/share/man /usr/share/icons /usr/share/vim \
-        /usr/share/perl /usr/share/poppler \
+        /usr/share/poppler \
         /usr/share/cmake /usr/share/cmake-3.22 \
         /usr/share/python-wheels \
         /usr/share/i18n \
-        /usr/lib/gcc /usr/lib/git-core \
+        /usr/lib/gcc \
         /usr/lib/aarch64-linux-gnu/libasan.so* \
         /usr/lib/aarch64-linux-gnu/libtsan.so* \
         /usr/lib/aarch64-linux-gnu/liblsan.so* \

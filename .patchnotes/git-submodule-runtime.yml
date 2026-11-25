@@ -1,0 +1,3 @@
+type: fix
+description: "Git-Submodule lassen sich in neu gebauten Odoo- und Konsolencontainern mit git submodule prüfen."
+breaking: false

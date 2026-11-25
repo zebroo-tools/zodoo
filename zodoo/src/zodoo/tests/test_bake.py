@@ -216,6 +216,34 @@ def test_bake_flow(version, isolated_home, tmp_path):
         )
         odoo_image = _project_image(project_name, "odoo")
 
+        _run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "--entrypoint",
+                "/bin/sh",
+                odoo_image,
+                "-ec",
+                r"""
+                cd "$(mktemp -d)"
+                git init -q upstream
+                git -C upstream -c user.name=Test -c user.email=test@example.com \
+                    commit -qm Initial --allow-empty
+                git init -q project
+                git -C project -c protocol.file.allow=always \
+                    submodule add -q ../upstream dependency
+                expected=$(git -C upstream rev-parse HEAD)
+                status=$(git -C project submodule status)
+                case "$status" in
+                    " $expected dependency"*) ;;
+                    *) echo "Unexpected submodule status: $status" >&2; exit 1 ;;
+                esac
+                """,
+            ],
+            cwd=project_dir,
+        )
+
         # 7) Start the image the way a Kubernetes pod does (EKS, containerd):
         #    real entrypoint, configuration only from the environment, no
         #    mounts, no /.dockerenv, cgroup v2 namespace showing only "0::/".

@@ -1,5 +1,13 @@
 # Troubleshooting
 
+## Git submodules in the container shell
+
+From the project checkout in the container, run `git submodule status` to
+list the checked-out revisions of Git submodules. If an older image reports
+`'submodule' is not a git command`, upgrade zodoo and rebuild and recreate the
+Odoo or console container. Gimera dependencies with `type: integrated` have no
+Git submodule entry. Read their configured revisions from `gimera.yml`.
+
 ## General
 
 ### Check project status
