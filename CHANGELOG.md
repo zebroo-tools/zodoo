@@ -1,5 +1,16 @@
 # Changelog
 
+## 12.13.1
+
+- **Fix**: `ssh host 'odoo ...'` findet die odoo-CLI jetzt ohne vorheriges `export PATH=...`.
+
+  `pipx ensurepath` haengt seine PATH-Zeile ans Ende der `~/.bashrc`, hinter den Ubuntu-Block "If not running interactively, don't do anything". Bei einem Befehl per ssh lief die Zeile deshalb nie. install.sh, `odoo setup reinstall` und `odoo setup upgrade` schreiben jetzt einen markierten Block (`# >>> zodoo PATH >>>`) an den Anfang der `~/.bashrc` (nur Linux, idempotent). Von Hand: `~/.local/bin/odoo setup ensure-path`.
+
+  Zum Pruefen: auf einem Host `odoo setup upgrade` ausfuehren, dann vom eigenen Rechner `ssh <host> 'odoo --version'` - es muss die Version kommen, kein "command not found". Ein zweiter Lauf aendert die `~/.bashrc` nicht mehr.
+- **Fix**: odoo setting KEY VALUE (ohne =) bricht mit Fehlermeldung und Korrekturvorschlag ab statt still nichts zu schreiben; nicht gesetzte Schlüssel melden „nicht gesetzt“; Lesen und Schreiben gemischt meldet „Cannot mix reading and writing settings.“
+- **Fix**: Git-Submodule lassen sich in neu gebauten Odoo- und Konsolencontainern mit git submodule prüfen.
+
+
 ## 12.13.0
 
 - **Feature**: odoo reload: Python-Pakete von Modulen, die in der Datenbank installiert sind, kommen ins Image, auch ohne MANIFEST-Eintrag (PYTHON_DEPS_FROM_DB, PYTHON_DEPS_DBS).

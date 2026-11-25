@@ -1,3 +1,0 @@
-type: fix
-description: "odoo setting KEY VALUE (ohne =) bricht mit Fehlermeldung und Korrekturvorschlag ab statt still nichts zu schreiben; nicht gesetzte Schlüssel melden „nicht gesetzt“; Lesen und Schreiben gemischt meldet „Cannot mix reading and writing settings.“"
-breaking: false
