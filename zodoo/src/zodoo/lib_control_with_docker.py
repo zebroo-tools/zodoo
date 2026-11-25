@@ -24,6 +24,7 @@ from .tools import _set_default_envs
 from .tools import _merge_env_dict
 from .tools import ensure_project_name
 from .tools import root_cmd
+from .tools import atomic_write_text
 import subprocess
 from .cli import Commands
 import tempfile
@@ -630,28 +631,24 @@ def _declared_compose_services(config):
 
 
 def _touch_proxy_warmup_gate(config):
-    """Touch the nginx-proxy warmup-gate sentinel from the host side so
+    """Set the nginx-proxy warmup-gate sentinel from the host side so
     external clients see the maintenance page (instead of the bare-503
     static fallback) while `odoo update` stops the web role for several
     minutes. The sentinel is cleared automatically once the web role
     spawns again and finishes its warmup loop (signal_warmup_done in
     odoo/bin/tools.py). Never raises — projects without the bundled
     proxy simply don't have the volume mounted."""
-    from .tools import atomic_write_text
-
     try:
         p = config.dirs["run"] / "proxy_exchange" / "warmup_in_progress"
         # The odoo container (root) creates the same sentinel when the web
         # role respawns. touch() on that root-owned 0644 file fails with
         # EACCES for the host user. Write a new file and rename it over the
         # old one instead: that only needs write access to the directory.
-        atomic_write_text(p, "1")
-        # mkstemp creates the file with mode 0600, but the proxy's nginx
-        # workers run as nobody and must be able to open it. 0644 is the
-        # mode touch() produced before.
-        p.chmod(0o644)
+        # The proxy's nginx workers run as nobody and must be able to open
+        # it, so keep 0644 (the mode touch() produced before).
+        atomic_write_text(p, "1", mode=0o644)
     except Exception as e:
-        click.secho(f"[warmup gate] could not touch {p}: {e}", fg="yellow")
+        click.secho(f"[warmup gate] could not set {p}: {e}", fg="yellow")
 
 
 def stop_update_blocking_roles(config):

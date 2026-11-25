@@ -16,6 +16,7 @@ from types import SimpleNamespace
 import pytest
 
 from zodoo.lib_control_with_docker import _touch_proxy_warmup_gate
+from zodoo.tools import atomic_write_text
 
 
 def _config(tmp_path):
@@ -33,7 +34,7 @@ def test_creates_sentinel_readable_for_proxy(tmp_path, capsys):
     assert p.exists()
     # The proxy's nginx workers run as nobody and open the file for reading.
     assert stat.S_IMODE(p.stat().st_mode) == 0o644
-    assert "could not touch" not in capsys.readouterr().out
+    assert "[warmup gate]" not in capsys.readouterr().out
 
 
 @pytest.mark.skipif(
@@ -49,11 +50,23 @@ def test_sentinel_not_writable_by_host_user(tmp_path, capsys, monkeypatch):
     p.parent.chmod(0o777)
     p.write_text("")
     p.chmod(0o444)
+    # Guard the setup: if touch() works here, the test proves nothing.
     with pytest.raises(PermissionError):
         p.touch()
 
     _touch_proxy_warmup_gate(_config(tmp_path))
 
-    assert "could not touch" not in capsys.readouterr().out
+    assert "[warmup gate]" not in capsys.readouterr().out
     assert p.exists()
     assert stat.S_IMODE(p.stat().st_mode) == 0o644
+
+
+def test_atomic_write_text_mode(tmp_path):
+    default = tmp_path / "default"
+    atomic_write_text(default, "x")
+    assert stat.S_IMODE(default.stat().st_mode) == 0o600
+
+    readable = tmp_path / "readable"
+    atomic_write_text(readable, "x", mode=0o644)
+    assert stat.S_IMODE(readable.stat().st_mode) == 0o644
+    assert readable.read_text() == "x"

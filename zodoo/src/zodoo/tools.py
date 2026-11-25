@@ -1252,13 +1252,17 @@ def verbose(txt):
         click.secho(txt, fg="gray")
 
 
-def atomic_write_text(path, content):
+def atomic_write_text(path, content, mode=None):
     """Write text content to path atomically via temp file + rename.
 
     Avoids permission errors when the file was previously created by
     another user (e.g. root inside a Docker container).  The old file
     is replaced in a single rename() call so readers never see a
     partial state.
+
+    mkstemp creates the file with mode 0600. Pass ``mode`` when other
+    users must read it; it is set on the temp file before the rename,
+    so the file never appears at ``path`` with the wrong mode.
     """
     from pathlib import Path
 
@@ -1267,6 +1271,8 @@ def atomic_write_text(path, content):
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
     try:
         os.write(fd, content.encode())
+        if mode is not None:
+            os.fchmod(fd, mode)
     except BaseException:
         os.close(fd)
         os.unlink(tmp)
