@@ -133,6 +133,12 @@ the full environment instead of the shortened default.
 
 Upgrade zodoo to the latest version (pulls `~/.odoo/images` and reinstalls `zodoo`).
 
+### `odoo setup ensure-path`
+
+Linux only. Writes the zodoo PATH block to the top of `~/.bashrc`, so
+non-interactive shells (`ssh host 'odoo ...'`) find `odoo`. Idempotent.
+`install.sh`, `odoo setup reinstall` and `odoo setup upgrade` call it for you.
+
 ---
 
 ## Database

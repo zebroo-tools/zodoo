@@ -1,0 +1,1 @@
+`ssh host 'odoo ...'` now finds `odoo` without `export PATH=...`: install.sh, `odoo setup reinstall` and `odoo setup upgrade` write an idempotent PATH block to the top of `~/.bashrc` (Linux), above the "not running interactively" guard. New command `odoo setup ensure-path` does the same on demand.

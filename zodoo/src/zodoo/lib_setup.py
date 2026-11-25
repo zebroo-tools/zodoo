@@ -831,11 +831,35 @@ def _reinstall():
     subprocess.check_call(
         ["pipx", "inject", "--force", "zodoo", "gimera"], shell=False
     )
+    _ensure_shell_path()
+
+
+def _ensure_shell_path():
+    # macOS hosts are not reached via `ssh host 'odoo ...'` and use zsh.
+    if on_osx():
+        return
+    from .lib_shellpath import ensure_path_for_non_interactive_shells
+
+    if ensure_path_for_non_interactive_shells():
+        click.secho(
+            "Added the zodoo PATH block to the top of ~/.bashrc "
+            "(odoo is now found by `ssh host 'odoo ...'`).",
+            fg="green",
+        )
 
 
 @setup.command(help="Reinstall zodoo python")
 def reinstall():
     _reinstall()
+
+
+@setup.command(
+    name="ensure-path",
+    help="Put the pipx bin dir on PATH for non-interactive shells "
+    "(top of ~/.bashrc). Idempotent; called by install.sh and reinstall.",
+)
+def ensure_path():
+    _ensure_shell_path()
 
 
 @setup.command(

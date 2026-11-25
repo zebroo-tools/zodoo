@@ -52,6 +52,14 @@ bash <(curl -fsSL https://raw.githubusercontent.com/zebroo-tools/zodoo/refs/head
 
 This installs the `odoo` command via `pipx` and sets up `~/.odoo/images/`.
 
+On Linux the installer also writes a small block to the **top** of
+`~/.bashrc`, between `# >>> zodoo PATH >>>` and `# <<< zodoo PATH <<<`.
+It puts the pipx bin dir (usually `~/.local/bin`) on `PATH` before the
+"not running interactively" guard of the default `~/.bashrc`, so remote
+commands like `ssh host 'odoo --version'` find `odoo` without an
+`export PATH=...`. `odoo setup reinstall` and `odoo setup upgrade` keep the block
+in place; running them again changes nothing. Do not edit the block by hand.
+
 ## Optional: Passwordless sudo for dev machines
 
 Required for btrfs/zfs snapshots and some file operations:

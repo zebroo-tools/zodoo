@@ -50,6 +50,27 @@ pipx ensurepath
 source ~/.bashrc  # or ~/.zshrc
 ```
 
+### `ssh host 'odoo ...'` says `odoo: command not found`
+
+An interactive login works, but a remote command does not. Cause: the line
+from `pipx ensurepath` sits at the end of `~/.bashrc`, behind the
+"If not running interactively, don't do anything" guard, so it never runs
+for `ssh host 'cmd'`.
+
+Fix on the host (idempotent):
+
+```bash
+~/.local/bin/odoo setup ensure-path
+```
+
+This writes the `# >>> zodoo PATH >>>` block to the top of `~/.bashrc`.
+Newer zodoo versions do this on install, `odoo setup reinstall` and
+`odoo setup upgrade`. Check from your machine:
+
+```bash
+ssh host 'odoo --version'
+```
+
 ---
 
 ## Startup Issues
