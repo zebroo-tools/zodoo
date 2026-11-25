@@ -88,6 +88,13 @@ pipx install -e "$SRC_DIR" ${PYTHONARG[@]}
 echo "📦 Injecting gimera..."
 pipx inject --force zodoo gimera
 
+# pipx ensurepath appends to the end of ~/.bashrc, behind the
+# "not running interactively" guard, so `ssh host 'odoo ...'` would not
+# find odoo. Let zodoo put its PATH block at the top (idempotent).
+PIPX_BIN_DIR="$(pipx environment --value PIPX_BIN_DIR 2>/dev/null || true)"
+PIPX_BIN_DIR="${PIPX_BIN_DIR:-$HOME/.local/bin}"
+"$PIPX_BIN_DIR/odoo" setup ensure-path
+
 # Setting up completion
 odoo completion -x
 
