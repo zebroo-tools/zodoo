@@ -637,10 +637,19 @@ def _touch_proxy_warmup_gate(config):
     spawns again and finishes its warmup loop (signal_warmup_done in
     odoo/bin/tools.py). Never raises — projects without the bundled
     proxy simply don't have the volume mounted."""
+    from .tools import atomic_write_text
+
     try:
         p = config.dirs["run"] / "proxy_exchange" / "warmup_in_progress"
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.touch()
+        # The odoo container (root) creates the same sentinel when the web
+        # role respawns. touch() on that root-owned 0644 file fails with
+        # EACCES for the host user. Write a new file and rename it over the
+        # old one instead: that only needs write access to the directory.
+        atomic_write_text(p, "1")
+        # mkstemp creates the file with mode 0600, but the proxy's nginx
+        # workers run as nobody and must be able to open it. 0644 is the
+        # mode touch() produced before.
+        p.chmod(0o644)
     except Exception as e:
         click.secho(f"[warmup gate] could not touch {p}: {e}", fg="yellow")
 

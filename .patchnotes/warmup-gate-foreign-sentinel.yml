@@ -1,0 +1,3 @@
+type: fix
+description: "odoo update setzt das Warmup-Gate des Proxys auch dann, wenn der Odoo-Container die Sperrdatei vorher als root angelegt hat. Bisher erschien dann die Warnung „[warmup gate] could not touch … Permission denied“; jetzt schreibt der Host die Datei neu und benennt sie um (Modus 0644, für den Proxy lesbar)."
+breaking: false
