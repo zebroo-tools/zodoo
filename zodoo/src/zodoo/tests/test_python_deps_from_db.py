@@ -273,3 +273,108 @@ class TestAfterComposeHook:
         hook.store_sha_of_external_deps(deps, (3, 12), first)
         hook.store_sha_of_external_deps(dict(deps), (3, 12), second)
         assert first.read_text() == second.read_text()
+
+
+# --- modules passed for the coming install (PYTHON_DEPS_EXTRA_MODULES) -----
+
+
+@pytest.fixture
+def pushed(addons, tmp_path):
+    """A module that just arrived with a pull: not on the MANIFEST list, not
+    in the database yet, depends on db_dep and needs a new package."""
+    _write_module(
+        tmp_path / "addons", "pushed_mod", ["db_dep"], ["lib_pushed"]
+    )
+    _clear_caches()
+    return addons
+
+
+class TestExtraModules:
+    def test_not_set_gives_no_modules(self, pushed):
+        hook = _after_compose()
+        assert hook._get_extra_build_modules({}) == set()
+        assert (
+            hook._get_extra_build_modules({"PYTHON_DEPS_EXTRA_MODULES": ""})
+            == set()
+        )
+
+    def test_list_is_parsed(self, pushed):
+        hook = _after_compose()
+        settings = {
+            "PYTHON_DEPS_EXTRA_MODULES": " pushed_mod, db_only,pushed_mod"
+        }
+        assert hook._get_extra_build_modules(settings) == {
+            "pushed_mod",
+            "db_only",
+        }
+
+    def test_module_without_source_is_an_error(self, pushed):
+        import click
+
+        hook = _after_compose()
+        settings = {"PYTHON_DEPS_EXTRA_MODULES": "pushed_mod,no_such_module"}
+        with pytest.raises(click.ClickException, match="no_such_module"):
+            hook._get_extra_build_modules(settings)
+
+    def test_extra_module_brings_its_packages_and_changes_the_hash(
+        self, pushed, tmp_path
+    ):
+        hook = _after_compose()
+        extra = hook._get_extra_build_modules(
+            {"PYTHON_DEPS_EXTRA_MODULES": "pushed_mod"}
+        )
+        with_extra = _pip(extra)
+        _clear_caches()
+        without = _pip(set())
+        assert "lib_pushed" in with_extra
+        assert "lib_db_dep" in with_extra  # its Odoo dependency
+        assert "lib_pushed" not in without
+
+        def sha(pip, name):
+            path = tmp_path / name
+            hook.store_sha_of_external_deps(
+                {"pip": pip, "deb": []}, (3, 12), path
+            )
+            return path.read_text()
+
+        assert sha(with_extra, "a") != sha(without, "b")
+
+    def test_determine_requirements_passes_extra_modules_on(
+        self, pushed, monkeypatch
+    ):
+        """The reload hook hands the extra modules to the dependency lookup,
+        together with the database modules; without the setting nothing is
+        added, so the hash stays as before."""
+        from zodoo import odoo_config
+
+        hook = _after_compose()
+        monkeypatch.setattr(
+            odoo_config, "MANIFEST", lambda: {"odoo_dir": "odoo"}
+        )
+        monkeypatch.setattr(
+            hook, "_get_db_build_modules", lambda s: {"db_only"}
+        )
+        seen = []
+
+        class Stop(Exception):
+            pass
+
+        def fake_get_dependencies(*args, db_modules=None, **kwargs):
+            seen.append(set(db_modules))
+            raise Stop()
+
+        monkeypatch.setattr(hook, "_get_dependencies", fake_get_dependencies)
+
+        class Config:
+            ODOO_VERSION = "19.0"
+
+        globals_ = {
+            "tools": type("T", (), {"get_services": lambda *a, **k: []})
+        }
+
+        for settings in ({"PYTHON_DEPS_EXTRA_MODULES": "pushed_mod"}, {}):
+            with pytest.raises(Stop):
+                hook._determine_requirements(
+                    Config(), {}, (3, 12), settings, globals_
+                )
+        assert seen == [{"db_only", "pushed_mod"}, {"db_only"}]

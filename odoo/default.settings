@@ -40,6 +40,10 @@ SHA_IN_DOCKER=0
 # PYTHON_DEPS_FROM_DB=0: MANIFEST only (e.g. images built without a database).
 PYTHON_DEPS_FROM_DB=1
 PYTHON_DEPS_DBS=
+# PYTHON_DEPS_EXTRA_MODULES: comma separated modules that are about to be
+# installed; pass them for one reload only:
+#   odoo reload -cR "PYTHON_DEPS_EXTRA_MODULES=mod_a,mod_b"
+PYTHON_DEPS_EXTRA_MODULES=
 
 DB_SSLMODE=disable
 
