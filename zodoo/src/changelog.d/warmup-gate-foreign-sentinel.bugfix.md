@@ -1,0 +1,1 @@
+`odoo update` no longer warns `[warmup gate] could not touch … Permission denied` when the odoo container (root) has already created the proxy warmup-gate sentinel. The host now replaces the file via temp file + rename (mode 0644, readable for the proxy) instead of `touch()`.
