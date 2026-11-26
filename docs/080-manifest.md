@@ -127,6 +127,13 @@ Rules:
   modules in the database. Without the setting the requirements hash stays as
   before. A name without source code in an addons path stops the reload.
 
+- **`odoo build` uses the same modules**: before it builds, `odoo build`
+  checks `requirements.hash` against the requirements (see
+  `odoo requirements-check`). This check takes the same module set as the
+  last `odoo reload`, including the database modules and
+  `PYTHON_DEPS_EXTRA_MODULES`. If the files are stale, it regenerates them
+  with the same `PYTHON_DEPS_EXTRA_MODULES` value.
+
 - **Several databases**: list them in `PYTHON_DEPS_DBS`; the image gets the
   union of their modules.
 - **Missing source code**: a module installed in a database but in no addons
