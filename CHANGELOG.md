@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.14.0
+
+- **Feature**: PostgreSQL 19 ist als Option wählbar: `odoo setting POSTGRES_VERSION=19`, danach `odoo reload` und `odoo build`. Der Standard bleibt 17. Die Images pgbackrest, cronjobs und pgtools bekommen dann den passenden Client 19; vorher wäre bei unbekannten Versionen still Client 14 installiert worden. Ein nicht unterstützter Wert bricht den Build jetzt mit einer klaren Meldung ab. Außerdem behoben: pgtools (`odoo pgcli`) hat das Build-Argument nie gesehen und immer Client 14 installiert, auch bei Server 17; nach `odoo build pgtools` passt der Client zum Server. Ein Wechsel bestehender Datenbanken geht nur per Dump/Restore.
+
+
 ## 12.13.1
 
 - **Fix**: `ssh host 'odoo ...'` findet die odoo-CLI jetzt ohne vorheriges `export PATH=...`.
