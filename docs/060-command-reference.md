@@ -119,6 +119,63 @@ Flags:
 
 Find and assign the next free port for `PROXY_PORT`, `DEBUG_PORT`, and (on macOS) `HOST_DB_PORT`.
 
+### `odoo setup orphans`
+
+Find settings of projects whose folder was deleted or renamed.
+`~/.odoo/settings.<projectname>` and `~/.odoo/run/<projectname>/` stay behind
+when the project folder goes away. The command works from any folder and
+lists every `settings.<projectname>` file with its stored project path and a
+status. Without `--clean` or `--purge-trash` it changes nothing.
+
+The stored path is `HOST_CUSTOMS_DIR` in the generated
+`~/.odoo/run/<projectname>/settings`, written by `odoo reload`.
+
+| Status    | Meaning                                                                                                                      | Removed by `--clean` |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `present` | The stored project folder exists.                                                                                            | no                   |
+| `missing` | The stored project folder does not exist.                                                                                    | yes                  |
+| `moved`   | The stored folder does not exist, but a folder with the same name was found below a `--search-dir`. The found path is shown. | no                   |
+| `unknown` | No run folder or no `HOST_CUSTOMS_DIR`, so the project path is not known.                                                    | no                   |
+
+```bash
+# list only
+odoo setup orphans --only-orphans
+
+# also look for projects that were moved to an archive folder
+odoo setup orphans -s ~/work -s ~/archive --depth 2
+
+# move all "missing" entries to the trash (asks first)
+odoo setup orphans -s ~/work -s ~/archive --clean
+
+# delete trash folders older than 30 days (asks first)
+odoo setup orphans --purge-trash 30
+```
+
+Options:
+
+- `-s` / `--search-dir PATH`: folder to search for moved projects; can be
+  given several times. Without it nothing is searched, and every entry whose
+  folder is gone is `missing`.
+- `--depth N`: folder levels below each search dir (default `2`, for example
+  `<customer>/<project>`).
+- `--only-orphans`: do not list `present` entries.
+- `--clean`: after a confirmation, move `settings.<projectname>` and
+  `run/<projectname>/` of every `missing` entry to
+  `~/.odoo/.trash/<YYYYMMDD-HHMMSS>/`. Docker containers, volumes and
+  databases of these projects are not touched.
+- `--purge-trash DAYS`: after a confirmation, delete trash folders whose
+  timestamp is older than `DAYS` days. Younger folders and folders with other
+  names stay.
+
+`-f` (`odoo -f setup orphans …`) skips the confirmations.
+
+To restore an entry, move the files back by hand:
+
+```bash
+mv ~/.odoo/.trash/<timestamp>/settings.<projectname> ~/.odoo/
+mv ~/.odoo/.trash/<timestamp>/run/<projectname> ~/.odoo/run/
+```
+
 ### `odoo status`
 
 Show project name, Odoo version, database connection URL, and key config

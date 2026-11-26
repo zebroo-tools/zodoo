@@ -47,6 +47,7 @@ from . import lib_module  # NOQA
 from . import lib_offsite  # NOQA
 from . import lib_pgbackrest  # NOQA
 from . import lib_setup  # NOQA
+from . import lib_setup_orphans  # NOQA
 from . import lib_src  # NOQA
 from . import lib_bakery  # NOQA
 from . import lib_docker_registry  # NOQA
