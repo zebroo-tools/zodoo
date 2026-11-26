@@ -525,7 +525,9 @@ def _determine_requirements(config, yml, PYTHON_VERSION, settings, globals):
     #     (every new module / lib). Goes into the project layer as the
     #     final ARG-driven step so it does not invalidate the static
     #     zodoo-CLI install layers above it.
-    db_modules = _get_db_build_modules(settings)
+    db_modules = _get_db_build_modules(settings) | _get_extra_build_modules(
+        settings
+    )
     all_dependencies = _get_dependencies(
         config, globals, PYTHON_VERSION, db_modules=db_modules
     )
@@ -734,6 +736,39 @@ def _get_db_build_modules(settings):
             bold=True,
         )
     return found
+
+
+def _get_extra_build_modules(settings):
+    """Modules named in PYTHON_DEPS_EXTRA_MODULES, for the coming install.
+
+    A caller that is about to install new modules (e.g. an autoupdate that
+    pulled modules which are neither on the MANIFEST install list nor in the
+    database yet) passes them for this one reload, so that the image gets
+    their Python packages before ``odoo update`` runs:
+
+        odoo reload -cR "PYTHON_DEPS_EXTRA_MODULES=mod_a,mod_b"
+
+    They count like MANIFEST install modules, including their dependencies.
+    A module without source code in an addons path is an error: installing
+    it would fail anyway.
+    """
+    from zodoo.module_tools import Module, NotInAddonsPath
+
+    names = settings.get("PYTHON_DEPS_EXTRA_MODULES") or ""
+    names = {x.strip() for x in str(names).split(",") if x.strip()}
+    missing = []
+    for name in sorted(names):
+        try:
+            Module.get_by_name(name)
+        except (NotInAddonsPath, Module.IsNot, KeyError):
+            missing.append(name)
+    if missing:
+        raise click.ClickException(
+            "PYTHON_DEPS_EXTRA_MODULES: no source code in any addons path for "
+            f"{', '.join(missing)}. Add the repository to the MANIFEST "
+            "addons_paths or correct the module name."
+        )
+    return names
 
 
 def _get_dependencies(

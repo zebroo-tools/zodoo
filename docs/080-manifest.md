@@ -97,7 +97,9 @@ them into the image requirements:
    default). This covers modules installed through the Apps menu that are not
    on the MANIFEST list. States read: `installed`, `to upgrade`, `to remove`
    and `to install`.
-3. All Odoo `depends` of these modules (transitive) and the matching
+3. The modules in `PYTHON_DEPS_EXTRA_MODULES`: modules that are about to be
+   installed and are neither on the MANIFEST list nor in the database yet.
+4. All Odoo `depends` of these modules (transitive) and the matching
    `auto_install` modules.
 
 Modules that are only available in an addons path add no packages.
@@ -111,6 +113,20 @@ Rules:
   project): `odoo reload` prints a yellow hint per database and uses the
   MANIFEST list only. Set `PYTHON_DEPS_FROM_DB=0` to build without a database
   on purpose.
+- **New modules before their install**: a module that arrives with a pull
+  and is installed right after it is not in the database yet. Pass it for this
+  one reload, so that the image gets its packages before `odoo update` runs:
+
+  ```bash
+  odoo reload -cR "PYTHON_DEPS_EXTRA_MODULES=mod_a,mod_b"
+  odoo build
+  odoo update mod_a,mod_b
+  ```
+
+  The value is not stored: the next `odoo reload` without it finds the
+  modules in the database. Without the setting the requirements hash stays as
+  before. A name without source code in an addons path stops the reload.
+
 - **Several databases**: list them in `PYTHON_DEPS_DBS`; the image gets the
   union of their modules.
 - **Missing source code**: a module installed in a database but in no addons

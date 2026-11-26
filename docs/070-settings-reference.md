@@ -111,10 +111,11 @@ Changing the version of an existing database:
 
 ## Python packages of installed modules
 
-| Setting               | Default | Description                                                                                                                                                                                                  |
-| --------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `PYTHON_DEPS_FROM_DB` | `1`     | `1` = `odoo reload` reads the installed modules from the database and adds their Python packages to the image, also for modules that are not on the MANIFEST install list. `0` = MANIFEST install list only. |
-| `PYTHON_DEPS_DBS`     | empty   | Comma-separated databases to read. Empty = `DBNAME`. Several databases give the union of their modules.                                                                                                      |
+| Setting                     | Default | Description                                                                                                                                                                                                                 |
+| --------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PYTHON_DEPS_FROM_DB`       | `1`     | `1` = `odoo reload` reads the installed modules from the database and adds their Python packages to the image, also for modules that are not on the MANIFEST install list. `0` = MANIFEST install list only.                |
+| `PYTHON_DEPS_DBS`           | empty   | Comma-separated databases to read. Empty = `DBNAME`. Several databases give the union of their modules.                                                                                                                     |
+| `PYTHON_DEPS_EXTRA_MODULES` | empty   | Comma-separated modules that are about to be installed and are not in the database yet. Pass them for one reload: `odoo reload -cR "PYTHON_DEPS_EXTRA_MODULES=mod_a,mod_b"`. A module without source code stops the reload. |
 
 Details and rules: [MANIFEST → Python packages in the image](./080-manifest.md#python-packages-in-the-image).
 
