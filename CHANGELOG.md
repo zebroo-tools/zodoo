@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.16.0
+
+- **Feature**: `odoo --version` gibt die zodoo-Version aus und endet mit Exit-Code 0. Die Option lädt kein Projekt und funktioniert deshalb in jedem Verzeichnis, auch per `ssh host 'odoo --version'` im Home-Verzeichnis. Die Version kommt aus derselben Quelle wie bei `odoo version`.
+
+
 ## 12.15.0
 
 - **Feature**: `odoo reload -cR "PYTHON_DEPS_EXTRA_MODULES=<modul>[,<modul>]"` nimmt Module mit, die gleich installiert werden, aber noch nicht in der Datenbank stehen (z. B. ein neues Modul aus einem Pull). Ihre Python-Pakete und die ihrer `depends` fließen in requirements.hash und Image, bevor `odoo update` läuft. Ohne das Setting bleibt der Hash wie bisher.
