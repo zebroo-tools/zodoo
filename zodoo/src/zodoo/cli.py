@@ -15,7 +15,27 @@ Commands = GlobalCommands()
 pass_config = click.make_pass_decorator(Config, ensure=True)
 
 
+def _print_version(ctx, param, value):
+    # Eager option: click handles it while parsing, before the group callback
+    # runs, so no project or settings are loaded and it works anywhere
+    # (e.g. `ssh host 'odoo --version'` in the home directory).
+    if not value or ctx.resilient_parsing:
+        return
+    from .tools import _get_version
+
+    click.echo(_get_version())
+    ctx.exit(0)
+
+
 @click.group(cls=AliasedGroup)
+@click.option(
+    "--version",
+    is_flag=True,
+    expose_value=False,
+    is_eager=True,
+    callback=_print_version,
+    help="Show the zodoo version and exit.",
+)
 @click.option("-f", "--force", is_flag=True)
 @click.option("-v", "--verbose", is_flag=True)
 @click.option(

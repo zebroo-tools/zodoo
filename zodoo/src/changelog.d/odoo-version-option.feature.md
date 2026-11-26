@@ -1,0 +1,1 @@
+`odoo --version` gibt die zodoo-Version aus (z. B. `12.15.0`) und endet mit Exit-Code 0. Die Option lädt kein Projekt und funktioniert deshalb in jedem Verzeichnis, auch per `ssh host 'odoo --version'` im Home-Verzeichnis. Bisher meldete das CLI „No such option: --version“.
