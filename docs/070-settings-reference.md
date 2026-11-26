@@ -89,10 +89,25 @@ level via the command line of the running roles.
 
 | Setting                      | Default   | Description                                               |
 | ---------------------------- | --------- | --------------------------------------------------------- |
-| `POSTGRES_VERSION`           | `14`      | PostgreSQL version: `11`, `12`, `13`, `14`, `15`.         |
+| `POSTGRES_VERSION`           | `17`      | PostgreSQL major version, see below.                      |
 | `HOST_DB_PORT`               | —         | Expose postgres on this host port (macOS/WSL only).       |
 | `NAMED_ODOO_POSTGRES_VOLUME` | —         | Use a named external volume (not deleted with `down -v`). |
 | `DB_SSLMODE`                 | `disable` | PostgreSQL SSL mode.                                      |
+
+Supported values for `POSTGRES_VERSION`: `11`, `12`, `13`, `14`, `16`, `17`
+(default) and `19`. The value selects the server image (`postgres/Dockerfile.<n>`)
+and the client in every image that ships `psql`/`pg_dump` (pgbackrest,
+pgtools, cronjobs). Servers 11 to 14 get client 14, newer servers their own
+client. Any other value stops `odoo build` with an error.
+
+Changing the version of an existing database:
+
+- Only by dump and restore: `odoo backup odoo-db`, set the new version,
+  `odoo reload`, `odoo build`, `odoo -f down --postgres-volume` (removes the
+  database volume), `odoo up -d`, `odoo restore odoo-db`. A data directory of
+  one major version does not start with another.
+- pgBackRest backups (physical) restore only into the same major version.
+  Take a new full backup after the switch.
 
 ## Python packages of installed modules
 

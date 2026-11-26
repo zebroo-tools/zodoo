@@ -1,3 +1,12 @@
+# Installs the postgres client matching POSTGRES_VERSION.
+#
+# The first RUN sets up pgdg and installs client 17 (needed for libpq-dev).
+# The second RUN replaces it with the client of the configured server:
+# servers 11-14 (and an unset version) get client 14, a newer client that
+# talks to all of them; 15 and later get their own client. Any other value
+# fails the build instead of silently falling back to an unrelated client.
+# Every other client is purged, so pg_dump/psql in the image can only be the
+# matching one.
 RUN \
     $(mv /etc/apt/apt.conf.d/01proxy /tmp || true) && \
     mkdir -p /etc/apt/keyrings && \
@@ -11,28 +20,13 @@ RUN \
     $(mv /tmp/01proxy /etc/apt/apt.conf.d || true)
 RUN \
 set -x && \
-if [ "$POSTGRES_VERSION" = "17" ]; then \
-  apt-get purge -y postgresql-14 postgresql-client-14 postgresql-contrib-14 || true; \
-  apt-get purge -y postgresql-15 postgresql-client-15 postgresql-contrib-15 || true; \
-  apt-get purge -y postgresql-16 postgresql-client-16 postgresql-contrib-16 || true; \
-  #___SNIPPET_APT_INSTALL___ \
-  postgresql-client-17; \
-elif [ "$POSTGRES_VERSION" = "16" ]; then \
-  apt-get purge -y postgresql-17 postgresql-client-17 postgresql-contrib-17 || true; \
-  apt-get purge -y postgresql-15 postgresql-client-15 postgresql-contrib-15 || true; \
-  apt-get purge -y postgresql-16 postgresql-client-16 postgresql-contrib-16 || true; \
-  #___SNIPPET_APT_INSTALL___ \
-  postgresql-client-16; \
-elif [ "$POSTGRES_VERSION" = "15" ]; then \
-  apt-get purge -y postgresql-14 postgresql-client-14 postgresql-contrib-14 || true; \
-  apt-get purge -y postgresql-17 postgresql-client-17 postgresql-contrib-17 || true; \
-  apt-get purge -y postgresql-16 postgresql-client-16 postgresql-contrib-16 || true; \
-  #___SNIPPET_APT_INSTALL___ \
-  postgresql-client-15; \
-else \
-  apt-get purge -y postgresql-15 postgresql-client-15 postgresql-contrib-15 || true; \
-  apt-get purge -y postgresql-17 postgresql-client-17 postgresql-contrib-17 || true; \
-  apt-get purge -y postgresql-16 postgresql-client-16 postgresql-contrib-16 || true; \
-  #___SNIPPET_APT_INSTALL___ \
-  postgresql-client-14; \
-fi
+case "$POSTGRES_VERSION" in \
+""|11|12|13|14) pg_client=14 ;; \
+1[5-9]|[2-9][0-9]) pg_client="$POSTGRES_VERSION" ;; \
+*) echo "postgres snippet: unsupported POSTGRES_VERSION '$POSTGRES_VERSION'" >&2; exit 1 ;; \
+esac && \
+for v in 14 15 16 17 18 19; do \
+[ "$v" = "$pg_client" ] || apt-get purge -y postgresql-$v postgresql-client-$v postgresql-contrib-$v || true; \
+done && \
+#___SNIPPET_APT_INSTALL___ \
+postgresql-client-$pg_client
