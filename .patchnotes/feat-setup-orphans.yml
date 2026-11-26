@@ -1,3 +1,0 @@
-type: feature
-description: "Neuer Befehl odoo setup orphans: listet Settings gelöschter Projekte in ~/.odoo auf und ändert dabei nichts. Aufräumen nur mit --clean nach Rückfrage; die Einträge landen im Papierkorb ~/.odoo/.trash/<zeitstempel>/."
-breaking: false

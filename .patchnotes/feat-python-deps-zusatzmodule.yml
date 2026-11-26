@@ -1,8 +1,0 @@
-type: feature
-breaking: false
-description: |
-  `odoo reload -cR "PYTHON_DEPS_EXTRA_MODULES=<modul>[,<modul>]"` nimmt Module
-  mit, die gleich installiert werden, aber noch nicht in der Datenbank stehen
-  (z. B. ein neues Modul aus einem Pull). Ihre Python-Pakete und die ihrer
-  `depends` fließen in requirements.hash und Image, bevor `odoo update` läuft.
-  Ohne das Setting bleibt der Hash wie bisher.

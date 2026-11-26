@@ -1,5 +1,12 @@
 # Changelog
 
+## 12.15.0
+
+- **Feature**: `odoo reload -cR "PYTHON_DEPS_EXTRA_MODULES=<modul>[,<modul>]"` nimmt Module mit, die gleich installiert werden, aber noch nicht in der Datenbank stehen (z. B. ein neues Modul aus einem Pull). Ihre Python-Pakete und die ihrer `depends` fließen in requirements.hash und Image, bevor `odoo update` läuft. Ohne das Setting bleibt der Hash wie bisher.
+- **Feature**: Neuer Befehl odoo setup orphans: listet Settings gelöschter Projekte in ~/.odoo auf und ändert dabei nichts. Aufräumen nur mit --clean nach Rückfrage; die Einträge landen im Papierkorb ~/.odoo/.trash/<zeitstempel>/.
+- **Fix**: odoo update setzt das Warmup-Gate des Proxys auch dann, wenn der Odoo-Container die Sperrdatei proxy_exchange/warmup_in_progress vorher als root angelegt hat. Bisher erschien dann die Warnung „[warmup gate] could not touch … Permission denied“. Prüfen: odoo update auf einer Instanz mit Proxy ausführen, während diese Datei root gehört; im Log steht keine Zeile „[warmup gate] could not …“, und die Datei hat danach den Modus 0644.
+
+
 ## 12.14.0
 
 - **Feature**: PostgreSQL 19 ist als Option wählbar: `odoo setting POSTGRES_VERSION=19`, danach `odoo reload` und `odoo build`. Der Standard bleibt 17. Die Images pgbackrest, cronjobs und pgtools bekommen dann den passenden Client 19; vorher wäre bei unbekannten Versionen still Client 14 installiert worden. Ein nicht unterstützter Wert bricht den Build jetzt mit einer klaren Meldung ab. Außerdem behoben: pgtools (`odoo pgcli`) hat das Build-Argument nie gesehen und immer Client 14 installiert, auch bei Server 17; nach `odoo build pgtools` passt der Client zum Server. Ein Wechsel bestehender Datenbanken geht nur per Dump/Restore.
