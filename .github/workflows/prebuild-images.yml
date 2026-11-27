@@ -35,6 +35,7 @@ on:
       - "zodoo/src/zodoo/lib_zodoo_registry.py"
       - ".github/workflows/prebuild-images.yml"
       - ".github/scripts/cleanup-job-home.sh"
+      - ".github/scripts/trivy-scan-images.sh"
   workflow_dispatch:
     inputs:
       versions:
@@ -42,6 +43,21 @@ on:
         required: false
         default: "19.0,20.0"
         type: string
+      services:
+        description: "Space-separated services to build (empty: all generic services)"
+        required: false
+        default: ""
+        type: string
+      push:
+        description: "Upload to the zodoo registry (off: build and scan only)"
+        required: false
+        default: true
+        type: boolean
+      force_scan_failure:
+        description: "Test only: make the Trivy scan fail to check that nothing is pushed"
+        required: false
+        default: false
+        type: boolean
   schedule:
     # Montags vor der Arbeitszeit -- so ist der Bestand zu Wochenbeginn frisch.
     - cron: "0 3 * * 1"
@@ -62,6 +78,18 @@ jobs:
     timeout-minutes: 120
     env:
       VERSIONS: ${{ github.event.inputs.versions || '19.0,20.0' }}
+      SERVICES_INPUT: ${{ github.event.inputs.services || '' }}
+      # Push and scan-failure test only differ from the defaults on a
+      # manual run; push and schedule runs always upload.
+      PUSH: ${{ github.event_name != 'workflow_dispatch' || inputs.push }}
+      TRIVY_FORCE_FAILURE: ${{ github.event_name == 'workflow_dispatch' && inputs.force_scan_failure }}
+      # Pinned Trivy release. The binary is verified against this SHA-256
+      # (from trivy_<version>_checksums.txt of the release). To update:
+      # change both values together.
+      # Deliberately no repository-variable override: the version changes
+      # only through a reviewed PR.
+      TRIVY_VERSION: "0.76.2"
+      TRIVY_SHA256: "bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf"
     steps:
       - name: Isolate job home and tools
         shell: bash
@@ -115,7 +143,31 @@ jobs:
           mkdir -p "$HOME/.odoo/images"
           rsync -a --exclude='.git' "$GITHUB_WORKSPACE/" "$HOME/.odoo/images/"
 
-      - name: Build and push generic images
+      - name: Install Trivy (pinned, checksum verified)
+        # Release binary instead of aquasecurity/trivy-action: no third-party
+        # action behind a movable tag, and the exact bytes are checked.
+        run: |
+          set -euo pipefail
+          if [ "$(uname -s)-$(uname -m)" != "Linux-x86_64" ]; then
+            echo "::error::Trivy install expects Linux x86_64, got $(uname -s)-$(uname -m)."
+            exit 1
+          fi
+          archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -fsSL --retry 3 -o "$TMPDIR/$archive" \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${archive}"
+          echo "${TRIVY_SHA256}  $TMPDIR/$archive" | sha256sum -c -
+          tar -xzf "$TMPDIR/$archive" -C "$HOME/.local/bin" trivy
+          rm -f "$TMPDIR/$archive"
+          trivy --version
+          # One DB download for all images; the scans run with
+          # --skip-db-update. A failed download fails the job (fail-closed).
+          echo "TRIVY_CACHE_DIR=$HOME/.cache/trivy" >> "$GITHUB_ENV"
+          trivy image --cache-dir "$HOME/.cache/trivy" --download-db-only --quiet
+          trivy image --cache-dir "$HOME/.cache/trivy" --download-java-db-only --quiet
+          mkdir -p "$RUNNER_TEMP/trivy-reports"
+          echo "TRIVY_REPORT_DIR=$RUNNER_TEMP/trivy-reports" >> "$GITHUB_ENV"
+
+      - name: Build, scan and push generic images
         env:
           # Der PUSH-Weg, nicht der Pull-Weg.
           #
@@ -182,6 +234,18 @@ jobs:
           # baute sie einzeln nach.
           SERVICES="postgres proxy cronjobs cronjobshell pgbackrest offsite"
           SERVICES="$SERVICES odoo_metrics_exporter rsync console pgtools"
+          # A manual run may narrow the list, e.g. to "postgres" for a test.
+          if [ -n "${SERVICES_INPUT// /}" ]; then
+            SERVICES="$SERVICES_INPUT"
+          fi
+          # Service names end up unquoted in command lines and file paths:
+          # allow plain names only (no options, no path parts, no globs).
+          if [[ ! "$SERVICES" =~ ^[a-z0-9_\ ]+$ ]]; then
+            echo "::error::Invalid services input: only a-z, 0-9, _ and spaces are allowed."
+            exit 1
+          fi
+          echo "Services: $SERVICES"
+          echo "Push to registry: $PUSH"
 
           # Die Registry-Einstellungen gehoeren in die BENUTZER-Datei,
           # nicht nur ins Projekt.
@@ -246,69 +310,103 @@ jobs:
             odoo setting "RUN_OFFSITE=1"
             odoo setting "RUN_DASHBOARD=1"
             odoo reload
+            # --no-zodoo-push: without it "odoo build" already queues the
+            # upload itself (enqueue_registry_uploads), before any scan.
             # shellcheck disable=SC2086
-            odoo build $SERVICES
+            odoo build --no-zodoo-push $SERVICES
+            # zodoo derives the project name from the folder (lower case,
+            # "." -> "_", long names shortened); "odoo setup status" is the
+            # only place that prints it. If the line format changes, this
+            # fails here instead of scanning the wrong images.
+            project_name="$(odoo setup status | sed -n 's/^projectname: *//p' | head -1)"
+            [ -n "$project_name" ] || { echo "::error::project name not found"; exit 1; }
+            # CVE scan of exactly the images zodoo-push would upload. Any
+            # error of the scan itself ends the job here, before the push.
+            report_dir="$TRIVY_REPORT_DIR/$project_name"
             # shellcheck disable=SC2086
-            odoo zodoo-push $SERVICES
-            # Und dann warten, bis die Warteschlange WIRKLICH leer ist.
-            #
-            # "odoo build" laedt nicht selbst hoch: enqueue_registry_uploads
-            # benennt das Image lokal um, legt einen Auftrag in
-            # ${run}/jobqueue/ und startet einen ABGEKOPPELTEN Arbeiter. Auf
-            # einem GitHub-Runner endet der Job unmittelbar danach, der
-            # Arbeiter stirbt mit ihm -- und in der Registry kommt nichts an.
-            #
-            # Genau so gesehen am 28.08.2026: der Lauf war gruen, die
-            # Tag-Liste der Registry danach unveraendert, und jede
-            # Kundenmaschine baute die Images weiter selbst. run-crontab ist
-            # der dafuer vorgesehene Notnagel und arbeitet die Warteschlange
-            # im Vordergrund ab.
-            odoo run-crontab
-            # run-crontab allein reicht nicht: der abgekoppelte Arbeiter hat
-            # die Auftraege in der Regel schon geklaut (sie heissen dann
-            # <job>.json.processing.<pid>), und run-crontab meldet "processed
-            # 0 job(s)", waehrend die Uploads noch laufen. Endet der Job
-            # jetzt, stirbt der Arbeiter mitten im Push.
-            #
-            # Also auf das Verzeichnis warten, bis weder ein wartender noch
-            # ein laufender Auftrag darin liegt.
-            qdir="$HOME/.odoo/run/$(basename "$project" | tr '.' '_')/jobqueue"
-            [ -d "$qdir" ] || qdir="$(find "$HOME/.odoo/run" -maxdepth 2 -type d -name jobqueue | head -1)"
-            if [ -n "${qdir:-}" ] && [ -d "$qdir" ]; then
-              for _ in $(seq 1 120); do
-                offen=$(find "$qdir" -maxdepth 1 \
-                  \( -name '*.json' -o -name '*.json.processing.*' \) | wc -l)
-                [ "$offen" -eq 0 ] && break
-                echo "warte auf $offen Upload(s) ..."
-                sleep 10
-              done
+            bash "$GITHUB_WORKSPACE/.github/scripts/trivy-scan-images.sh" scan "$project_name" "$report_dir" $SERVICES
+            # shellcheck disable=SC2086
+            bash "$GITHUB_WORKSPACE/.github/scripts/trivy-scan-images.sh" verify "$project_name" "$report_dir" $SERVICES
+            if [ "$PUSH" != "true" ]; then
+              echo "Push disabled for this run: zodoo-push skipped."
+            else
+              # shellcheck disable=SC2086
+              odoo zodoo-push $SERVICES
+              # Und dann warten, bis die Warteschlange WIRKLICH leer ist.
+              #
+              # "odoo build" laedt nicht selbst hoch: enqueue_registry_uploads
+              # benennt das Image lokal um, legt einen Auftrag in
+              # ${run}/jobqueue/ und startet einen ABGEKOPPELTEN Arbeiter. Auf
+              # einem GitHub-Runner endet der Job unmittelbar danach, der
+              # Arbeiter stirbt mit ihm -- und in der Registry kommt nichts an.
+              #
+              # Genau so gesehen am 28.08.2026: der Lauf war gruen, die
+              # Tag-Liste der Registry danach unveraendert, und jede
+              # Kundenmaschine baute die Images weiter selbst. run-crontab ist
+              # der dafuer vorgesehene Notnagel und arbeitet die Warteschlange
+              # im Vordergrund ab.
               odoo run-crontab
-              uebrig=$(find "$qdir" -maxdepth 1 \
-                \( -name '*.json' -o -name '*.json.processing.*' -o -name '*.failed.*' \) | wc -l)
-              if [ "$uebrig" -ne 0 ]; then
-                echo "::error::$uebrig Upload(s) nicht abgeschlossen -- die Images fehlen in der Registry."
-                echo "--- docker-Zugang NACH dem Fehlschlag:"
-                python3 -c 'import json,os
+              # run-crontab allein reicht nicht: der abgekoppelte Arbeiter hat
+              # die Auftraege in der Regel schon geklaut (sie heissen dann
+              # <job>.json.processing.<pid>), und run-crontab meldet "processed
+              # 0 job(s)", waehrend die Uploads noch laufen. Endet der Job
+              # jetzt, stirbt der Arbeiter mitten im Push.
+              #
+              # Also auf das Verzeichnis warten, bis weder ein wartender noch
+              # ein laufender Auftrag darin liegt.
+              qdir="$HOME/.odoo/run/$(basename "$project" | tr '.' '_')/jobqueue"
+              [ -d "$qdir" ] || qdir="$(find "$HOME/.odoo/run" -maxdepth 2 -type d -name jobqueue | head -1)"
+              if [ -n "${qdir:-}" ] && [ -d "$qdir" ]; then
+                for _ in $(seq 1 120); do
+                  offen=$(find "$qdir" -maxdepth 1 \
+                    \( -name '*.json' -o -name '*.json.processing.*' \) | wc -l)
+                  [ "$offen" -eq 0 ] && break
+                  echo "warte auf $offen Upload(s) ..."
+                  sleep 10
+                done
+                odoo run-crontab
+                uebrig=$(find "$qdir" -maxdepth 1 \
+                  \( -name '*.json' -o -name '*.json.processing.*' -o -name '*.failed.*' \) | wc -l)
+                if [ "$uebrig" -ne 0 ]; then
+                  echo "::error::$uebrig Upload(s) nicht abgeschlossen -- die Images fehlen in der Registry."
+                  echo "--- docker-Zugang NACH dem Fehlschlag:"
+                  python3 -c 'import json,os
           p = os.path.expanduser("~/.docker/config.json")
           c = json.load(open(p)) if os.path.exists(p) else {}
           for k, v in sorted(c.get("auths", {}).items()):
               print("  " + k + ": Felder=" + str(sorted(v))
                     + " auth-Wert gefuellt=" + str(bool(v.get("auth"))))' || true
-                find "$qdir" -maxdepth 1 -type f -printf '%f\\n' || true
-                # Ohne die Protokolle des Arbeiters raet man hinterher, woran
-                # es lag -- und der Runner ist dann weg.
-                for f in "$qdir"/log/*; do
-                  [ -f "$f" ] || continue
-                  echo "----- $(basename "$f")"
-                  tail -40 "$f"
-                done
-                exit 1
+                  find "$qdir" -maxdepth 1 -type f -printf '%f\\n' || true
+                  # Ohne die Protokolle des Arbeiters raet man hinterher, woran
+                  # es lag -- und der Runner ist dann weg.
+                  for f in "$qdir"/log/*; do
+                    [ -f "$f" ] || continue
+                    echo "----- $(basename "$f")"
+                    tail -40 "$f"
+                  done
+                  exit 1
+                fi
               fi
             fi
             cd /
             rm -rf "$project"
             echo "::endgroup::"
           done
+
+      - name: Upload Trivy reports
+        # Also after a failed scan: whatever was scanned up to then is kept.
+        # The repo is public, so the artifact is readable by any GitHub user.
+        # The scan script already drops the image config (env, build history)
+        # from the JSON reports. The CVE list itself is not secret: the
+        # images are anonymously pullable, anyone can scan them. 14 days
+        # cover the weekly run plus one spare week.
+        if: always() && env.TRIVY_REPORT_DIR != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-reports
+          path: ${{ env.TRIVY_REPORT_DIR }}
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Remove job home
         # Must stay the last step. Containers write into the job home as a
