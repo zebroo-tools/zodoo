@@ -1160,7 +1160,8 @@ def update(
     updateinprogress = config.dirs["run"] / "proxy_exchange" / "odoo_update"
     updateinprogress.parent.mkdir(parents=True, exist_ok=True)
     if not config.DEVMODE and updateinprogress:
-        atomic_write_text(updateinprogress, "1")
+        # The proxy's nginx workers run as nobody and must read the flag.
+        atomic_write_text(updateinprogress, "1", mode=0o644)
     safepoint_marker = None
     try:
 
@@ -1375,7 +1376,7 @@ def update(
             )
         raise
     finally:
-        atomic_write_text(updateinprogress, "0")
+        atomic_write_text(updateinprogress, "0", mode=0o644)
 
 
 def _assure_update_log_ignored(project_dir, owner_uid=None):
