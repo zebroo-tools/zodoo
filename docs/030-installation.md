@@ -132,6 +132,11 @@ before you switch such a project to 3.14. Odoo 18 and older are only used
 with their defaults; their release.py has no range, and zodoo only enforces
 the minimum of 3.10 for Odoo 17 and 18.
 
+Some pins in Odoo's `requirements.txt` do not build on a newer Python. zodoo
+rewrites the known ones for the base image and the project layer, only for
+the Python release that needs it: on Python 3.14 `libsass==0.22.0` becomes
+`libsass==0.23.0` (the 0.22.0 sdist uses an `ast` API that 3.14 removed).
+
 A version that is not in the registry yet is built with
 `odoo docker build-pythons <version>` (both architectures, then pushed).
 

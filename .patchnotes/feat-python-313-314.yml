@@ -9,6 +9,9 @@ description: |
   (`MIN_PY_VERSION`/`MAX_PY_VERSION`) des Projekts und bricht mit einer
   klaren Meldung ab, wenn die gewählte Version außerhalb liegt, z. B.
   Python 3.14 auf einem älteren 19.0-Stand (dort ist 3.13 das Maximum).
+  Auf Python 3.14 installiert zodoo libsass 0.23.0 statt der von Odoo
+  gepinnten 0.22.0, die dort nicht baut; für ältere Python-Versionen
+  bleibt alles wie bisher.
   Prüfen: im Odoo-19-Projekt `ODOO_PYTHON_VERSION=3.14.0` setzen; bei
   altem Odoo-Stand meldet `odoo reload` den Bereich, bei aktuellem baut
   und startet das Projekt. Die Tabelle der Kombinationen steht in der
