@@ -170,11 +170,14 @@ Odoo logs a warning about running as root; that is expected here.
 
 ## Registry
 
-| Setting            | Default | Description                                                                       |
-| ------------------ | ------- | --------------------------------------------------------------------------------- |
-| `HUB_URL`          | —       | Docker registry: `host:port/path` or `user:password@host:port/path`.              |
-| `REGISTRY`         | `0`     | `1` = rewrite all image URLs to HUB_URL, disable local builds. Use on production. |
-| `DOCKER_IMAGE_TAG` | —       | Tag for registry images (e.g. `latest`, `v1.2.3`).                                |
+| Setting                              | Default | Description                                                                        |
+| ------------------------------------ | ------- | ---------------------------------------------------------------------------------- |
+| `HUB_URL`                            | —       | Docker registry: `host:port/path` or `user:password@host:port/path`.               |
+| `REGISTRY`                           | `0`     | `1` = rewrite all image URLs to HUB_URL, disable local builds. Use on production.  |
+| `DOCKER_IMAGE_TAG`                   | —       | Tag for registry images (e.g. `latest`, `v1.2.3`).                                 |
+| `ZODOO_JOBQUEUE_MAX_ATTEMPTS`        | `3`     | Attempts per background upload job in total; `0` = never retry a failed job.       |
+| `ZODOO_JOBQUEUE_RETRY_DELAY_MINUTES` | `10`    | Minimum wait after a failed attempt before the next `odoo run-crontab` retries it. |
+| `ZODOO_JOBQUEUE_RETRY_MAX_AGE_HOURS` | `24`    | Failed jobs older than this are not retried any more.                              |
 
 ## Memory Limits
 

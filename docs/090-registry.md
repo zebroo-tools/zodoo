@@ -148,6 +148,25 @@ Do not confuse this with the `REGISTRY=1` setting above: that one rewrites all
 image references to `HUB_URL` and blocks local builds, which is meant for
 production systems and would break a development machine.
 
+### Background uploads (job queue)
+
+`odoo build` does not push the cache images itself. It writes one job per
+upload to `~/.odoo/run/<project>/jobqueue/` and starts a detached
+`odoo run-crontab`, which runs with the same project name and `-xs`/`-xd`
+files as the build. Its output lands in `jobqueue/log/worker_<time>.log`.
+
+| File                         | Meaning                  |
+| ---------------------------- | ------------------------ |
+| `<id>.json`                  | waiting                  |
+| `<id>.json.processing.<pid>` | a worker is uploading it |
+| `<id>.json.failed.<n>`       | failed `n` times         |
+
+A failed upload is retried by the next `odoo run-crontab` (started by the next
+build, or by hand): at most `ZODOO_JOBQUEUE_MAX_ATTEMPTS` times in total, not
+before `ZODOO_JOBQUEUE_RETRY_DELAY_MINUTES` have passed, and only while the job
+is younger than `ZODOO_JOBQUEUE_RETRY_MAX_AGE_HOURS`. Older failed jobs stay as
+they are; look at the worker log, then delete them.
+
 ### How the cache images get there: prebuild with CVE scan
 
 The CI workflow `Prebuild generic images`

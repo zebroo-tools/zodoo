@@ -69,6 +69,15 @@ SRC_EXTRA=1
 # don't require image rebuilds.
 ZODOO_EMBED=0
 
+# Host job queue (${run}/jobqueue, e.g. registry uploads after a build):
+# a failed job is retried by the next `odoo run-crontab` up to
+# MAX_ATTEMPTS times in total, at the earliest RETRY_DELAY_MINUTES after the
+# last failure and only while the job is younger than RETRY_MAX_AGE_HOURS.
+# MAX_ATTEMPTS=0 turns retries off.
+ZODOO_JOBQUEUE_MAX_ATTEMPTS=3
+ZODOO_JOBQUEUE_RETRY_DELAY_MINUTES=10
+ZODOO_JOBQUEUE_RETRY_MAX_AGE_HOURS=24
+
 # Standard-Image-Modus: statt unseres gebauten Images laeuft das offizielle
 # odoo:<version> von Docker Hub. Proxy, Postgres, pgBackRest und Monitoring bleiben.
 # Nicht alle zodoo-Befehle funktionieren dann (siehe docs).

@@ -3,15 +3,28 @@ File-based job queue for host-side background work (e.g. registry uploads).
 
 Used to decouple slow operations (large `docker push`) from interactive
 commands. Jobs are written to ``${run}/jobqueue/`` as JSON files. A worker
-process is kicked off detached at enqueue time for low latency, and the
-``odoo run-crontab`` command processes any leftovers as a safety net for
-crashed workers or reboots.
+process is kicked off detached at enqueue time for low latency. Every
+later ``odoo run-crontab`` of the same project (the next enqueue, or a
+cron entry if one was set up) processes any leftovers, e.g. after crashed
+workers or reboots. zodoo itself does not install such a cron entry.
+
+The worker runs with the same project name and restrict files (``-p``,
+``-xs``, ``-xd``) as the enqueuing command. Without them it resolves the
+project from its working directory, which fails for checkouts whose
+directory name differs from the project name (temporary repos, wrappers
+with ``--restrict-setting``) - their queues were never processed.
 
 State machine per job file:
   <job_id>.json                  pending
   <job_id>.json.processing.<pid> claimed (atomic rename)
   (deleted)                      success
-  <job_id>.json.failed.<n>       failed n times
+  <job_id>.json.failed.<n>       failed n times (n = ``attempts`` in body)
+
+Failed jobs are put back to pending when all of these hold (settings):
+  - attempts < ZODOO_JOBQUEUE_MAX_ATTEMPTS (0 or unset: never retry)
+  - the last failure is older than ZODOO_JOBQUEUE_RETRY_DELAY_MINUTES
+  - the job was created less than ZODOO_JOBQUEUE_RETRY_MAX_AGE_HOURS ago,
+    so old jobs whose images may be gone are not pushed again and again
 
 Atomic claim via ``os.rename`` (POSIX guarantee on the same filesystem).
 Stale ``.processing.*`` files (mtime older than STALE_AFTER_SEC and the
@@ -78,10 +91,28 @@ def enqueue(config, job_type, payload):
     return final
 
 
+def _worker_command(config):
+    """``odoo run-crontab`` with the caller's project and restrict files.
+
+    Passing them on makes the worker read the same run dir (and thus the
+    same queue) as the command that enqueued the job.
+    """
+    cmd = ["odoo"]
+    restrict = getattr(config, "restrict", None) or {}
+    for option, key in (("-xs", "settings"), ("-xd", "docker-compose")):
+        for path in restrict.get(key) or []:
+            cmd += [option, str(path)]
+    if config.project_name:
+        cmd += ["-p", config.project_name]
+    cmd.append("run-crontab")
+    return cmd
+
+
 def spawn_worker(config):
     """Kick off a detached ``odoo run-crontab`` for this project.
 
-    Best-effort: if Popen fails the cron entry is the safety net.
+    Best-effort: if Popen fails, the next ``odoo run-crontab`` picks the
+    job up.
     """
     if not config.WORKING_DIR:
         return
@@ -89,7 +120,7 @@ def spawn_worker(config):
     try:
         with open(log_file, "a") as fh:
             subprocess.Popen(
-                ["odoo", "run-crontab"],
+                _worker_command(config),
                 cwd=str(config.WORKING_DIR),
                 stdout=fh,
                 stderr=subprocess.STDOUT,
@@ -100,7 +131,7 @@ def spawn_worker(config):
     except OSError as e:
         click.secho(
             f"Could not spawn background worker ({e}); "
-            "rely on `odoo run-crontab` cron entry instead.",
+            "the next `odoo run-crontab` will pick the job up.",
             fg="yellow",
         )
 
@@ -122,12 +153,13 @@ def _claim(job_path):
         return None
 
 
-def _release_failed(processing_path):
-    """Rename ``.processing.<pid>`` to ``.failed.<n>`` (or increment n)."""
+def _release_failed(processing_path, attempts=1):
+    """Rename ``.processing.<pid>`` to ``.failed.<attempts>`` (or the next
+    free n if that name is taken)."""
     name = processing_path.name
     base = name.split(".processing.", 1)[0]
     parent = processing_path.parent
-    n = 1
+    n = max(1, attempts)
     while (parent / f"{base}.failed.{n}").exists():
         n += 1
     target = parent / f"{base}.failed.{n}"
@@ -174,6 +206,61 @@ def _reclaim_stale(qdir):
             pass
 
 
+def _setting_int(config, key):
+    """Integer setting; unset or empty counts as 0."""
+    value = getattr(config, f"{key}_as_int", None)
+    return int(value or 0)
+
+
+def _attempts(path, body):
+    """Failed attempts so far. Jobs written before the counter existed
+    only carry it in the file name (``.failed.<n>``)."""
+    if "attempts" in body:
+        return int(body["attempts"])
+    try:
+        return int(path.name.rsplit(".failed.", 1)[1])
+    except (IndexError, ValueError):
+        return 0
+
+
+def _requeue_failed(config, qdir):
+    """Put failed jobs back to pending that may be retried (see module
+    docstring). Returns the number of requeued jobs."""
+    max_attempts = _setting_int(config, "ZODOO_JOBQUEUE_MAX_ATTEMPTS")
+    if max_attempts <= 0:
+        return 0
+    delay = _setting_int(config, "ZODOO_JOBQUEUE_RETRY_DELAY_MINUTES") * 60
+    max_age = _setting_int(config, "ZODOO_JOBQUEUE_RETRY_MAX_AGE_HOURS") * 3600
+    now = time.time()
+    requeued = 0
+    for p in sorted(qdir.glob("*.json.failed.*")):
+        try:
+            body = json.loads(p.read_text())
+            mtime = p.stat().st_mtime
+        except (OSError, ValueError):
+            continue
+        if _attempts(p, body) >= max_attempts:
+            continue
+        if now - mtime < delay:
+            continue
+        try:
+            created = datetime.fromisoformat(body["created_at"]).timestamp()
+        except (KeyError, TypeError, ValueError):
+            continue
+        if now - created > max_age:
+            continue
+        original = Path(str(p).rsplit(".failed.", 1)[0])
+        if original.exists():
+            continue
+        try:
+            os.rename(p, original)
+        except OSError:
+            continue
+        click.secho(f"Retrying failed job: {original.name}", fg="yellow")
+        requeued += 1
+    return requeued
+
+
 def _get_handlers():
     """Lazy import to avoid circular imports at module load time."""
     from .lib_zodoo_registry import (
@@ -187,6 +274,13 @@ def _get_handlers():
     }
 
 
+def _mark_failed(processing_path, body):
+    """Count the attempt in the job body, then move it to ``.failed.<n>``."""
+    body["attempts"] = _attempts(processing_path, body) + 1
+    processing_path.write_text(json.dumps(body, indent=2))
+    return _release_failed(processing_path, body["attempts"])
+
+
 def _run_one(config, processing_path):
     body = json.loads(processing_path.read_text())
     job_type = body.get("type")
@@ -197,13 +291,13 @@ def _run_one(config, processing_path):
         click.secho(
             f"No handler for job type {job_type!r}; marking failed.", fg="red"
         )
-        _release_failed(processing_path)
+        _mark_failed(processing_path, body)
         return False
     try:
         handler(config, payload)
     except Exception as e:
         click.secho(f"Job {body.get('id')} failed: {e}", fg="red")
-        _release_failed(processing_path)
+        _mark_failed(processing_path, body)
         return False
     processing_path.unlink()
     click.secho(f"Job {body.get('id')} done", fg="green")
@@ -215,6 +309,7 @@ def process_pending(config):
     if not qdir or not qdir.exists():
         return 0
     _reclaim_stale(qdir)
+    _requeue_failed(config, qdir)
     processed = 0
     for job in sorted(qdir.glob("*.json")):
         claimed = _claim(job)
@@ -230,9 +325,9 @@ def process_pending(config):
 def run_crontab_cmd(config):
     """Process pending background jobs in ``${run}/jobqueue/``.
 
-    Intended to be invoked from the system crontab as a safety net for
-    crashed/lost detached workers. Also triggered immediately by commands
-    that enqueue work (e.g. ``odoo build``).
+    Triggered immediately by commands that enqueue work (e.g.
+    ``odoo build``). Can also be invoked from the system crontab as a
+    safety net for crashed/lost detached workers and to run due retries.
     """
     n = process_pending(config)
     click.secho(f"run-crontab: processed {n} job(s)", fg="green")
