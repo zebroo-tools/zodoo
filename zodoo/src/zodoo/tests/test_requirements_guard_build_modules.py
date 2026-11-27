@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from zodoo import lib_requirements_guard as guard
+from zodoo.module_tools import parse_module_names
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 
@@ -46,11 +47,7 @@ def hook(monkeypatch, tmp_path):
     monkeypatch.setattr(
         hook,
         "_get_extra_build_modules",
-        lambda s: {
-            x
-            for x in str(s.get("PYTHON_DEPS_EXTRA_MODULES") or "").split(",")
-            if x
-        },
+        lambda s: set(parse_module_names(s.get("PYTHON_DEPS_EXTRA_MODULES"))),
     )
 
     def fake_get_dependencies(config, globals_, python_version, **kwargs):
@@ -98,7 +95,9 @@ def test_build_keeps_a_hash_written_with_extra_modules(
         guard.subprocess, "check_call", lambda cmd, cwd: calls.append(cmd)
     )
     monkeypatch.setattr(guard, "_dirty_generated_files", lambda c: [])
-    assert guard.ensure_requirements_current(Config(tmp_path), SETTINGS) is False
+    assert (
+        guard.ensure_requirements_current(Config(tmp_path), SETTINGS) is False
+    )
     assert calls == []
 
 
@@ -114,11 +113,15 @@ def test_build_keeps_a_hash_written_with_extra_modules(
     ],
 )
 def test_regeneration_keeps_extra_modules(settings, tail):
-    assert guard.reload_command(settings) == [
-        "odoo",
-        "reload",
-        "--no-gimera-apply",
-    ] + tail
+    assert (
+        guard.reload_command(settings)
+        == [
+            "odoo",
+            "reload",
+            "--no-gimera-apply",
+        ]
+        + tail
+    )
 
 
 def test_stale_hash_regenerates_with_extra_modules(
@@ -130,7 +133,9 @@ def test_stale_hash_regenerates_with_extra_modules(
         guard.subprocess, "check_call", lambda cmd, cwd: calls.append(cmd)
     )
     monkeypatch.setattr(guard, "_dirty_generated_files", lambda c: [])
-    assert guard.ensure_requirements_current(Config(tmp_path), SETTINGS) is True
+    assert (
+        guard.ensure_requirements_current(Config(tmp_path), SETTINGS) is True
+    )
     assert calls == [
         [
             "odoo",
@@ -140,3 +145,11 @@ def test_stale_hash_regenerates_with_extra_modules(
             "PYTHON_DEPS_EXTRA_MODULES=pushed_mod",
         ]
     ]
+
+
+def test_regeneration_normalizes_the_module_list():
+    """Blanks and duplicates are dropped the same way as in the reload hook."""
+    settings = {"PYTHON_DEPS_EXTRA_MODULES": " b, a ,,b "}
+    assert (
+        guard.reload_command(settings)[-1] == "PYTHON_DEPS_EXTRA_MODULES=a,b"
+    )
