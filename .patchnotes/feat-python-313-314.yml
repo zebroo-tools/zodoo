@@ -1,0 +1,15 @@
+type: feature
+breaking: false
+description: |
+  Odoo 19 und Odoo 20 laufen im Container jetzt auch mit Python 3.13
+  bzw. 3.14. Auswahl pro Projekt mit
+  `odoo setting ODOO_PYTHON_VERSION=3.13.13`, danach `odoo reload` und
+  `odoo build`. Der Standard bleibt 3.12.11.
+  `odoo reload` liest den erlaubten Bereich aus `odoo/release.py`
+  (`MIN_PY_VERSION`/`MAX_PY_VERSION`) des Projekts und bricht mit einer
+  klaren Meldung ab, wenn die gewählte Version außerhalb liegt, z. B.
+  Python 3.14 auf einem älteren 19.0-Stand (dort ist 3.13 das Maximum).
+  Prüfen: im Odoo-19-Projekt `ODOO_PYTHON_VERSION=3.14.0` setzen; bei
+  altem Odoo-Stand meldet `odoo reload` den Bereich, bei aktuellem baut
+  und startet das Projekt. Die Tabelle der Kombinationen steht in der
+  Installationsdoku unter „Python inside the Odoo container“.

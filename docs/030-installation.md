@@ -103,6 +103,38 @@ rm -Rf ~/.odoo/images
 bash <(curl -fsSL https://raw.githubusercontent.com/zebroo-tools/zodoo/refs/heads/main/install.sh)
 ```
 
+## Python inside the Odoo container
+
+The Python on the host (see Prerequisites) and the Python inside the Odoo
+container are independent. The container gets a prebuilt interpreter
+`zodoo/python:<version>-<arch>` from the zodoo registry. Without a setting
+zodoo picks the default for the Odoo version, for Odoo 17 – 20 that is
+3.12.11. Choose another one per project:
+
+```bash
+odoo setting ODOO_PYTHON_VERSION=3.13.13
+odoo reload
+odoo build
+```
+
+| Odoo | Python range of the Odoo source | Default | Tested with zodoo |
+| ---- | ------------------------------- | ------- | ----------------- |
+| 19   | 3.10 – 3.14                     | 3.12.11 | 3.12, 3.13        |
+| 20   | 3.12 – 3.14                     | 3.12.11 | 3.12, 3.14        |
+
+The range comes from `MIN_PY_VERSION` and `MAX_PY_VERSION` in
+`odoo/release.py` of the project. `odoo reload` reads both values and aborts
+with a message when `ODOO_PYTHON_VERSION` is outside the range. Odoo itself
+only warns above `MAX_PY_VERSION`; zodoo aborts, because the pinned
+requirements of that Odoo checkout are not built for a newer Python. Older
+19.0 checkouts still say `MAX_PY_VERSION = (3, 13)`: update the Odoo source
+before you switch such a project to 3.14. Odoo 18 and older are only used
+with their defaults; their release.py has no range, and zodoo only enforces
+the minimum of 3.10 for Odoo 17 and 18.
+
+A version that is not in the registry yet is built with
+`odoo docker build-pythons <version>` (both architectures, then pushed).
+
 ## Why the base images are pinned to old distributions
 
 Each Odoo generation gets a base of its own era, and that is deliberate — old
