@@ -1,0 +1,3 @@
+type: fix
+description: "odoo robot run --all: Zwei Robot-Suiten mit gleichem Dateinamen (z. B. tests/suites/x/test_mapper.robot und modul/tests/test_mapper.robot) bekommen eigene Ausgabeordner. Bisher schrieben beide in denselben Ordner, die zweite überschrieb die Ergebnisse der ersten und der Lauf brach beim Verschieben von report.html für alle folgenden Suiten ab. Prüfen: siehe Changelog-Fragment."
+breaking: false

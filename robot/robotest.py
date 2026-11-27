@@ -191,13 +191,39 @@ def _run_test(
     }
 
 
+def _output_sub_dir_names(test_files, parallel, src_dir=Path("/opt/src")):
+    """Map each test file to the name of its output directory.
+
+    The name is ``<stem>_p<parallel>``. Two suites can share a file name
+    (``tests/a/test_x.robot`` and ``module/tests/test_x.robot``); they would
+    then write into the same directory, the second run overwrites the
+    output of the first and moving its report.html aborts the whole run.
+    Such suites get their path relative to ``src_dir`` in the name instead.
+    """
+    stems = [test_file.stem for test_file in test_files]
+    names = {}
+    for test_file in test_files:
+        if stems.count(test_file.stem) == 1:
+            base = test_file.stem
+        else:
+            try:
+                rel = test_file.relative_to(src_dir)
+            except ValueError:
+                rel = test_file
+            base = "__".join(rel.with_suffix("").parts).lstrip("/_")
+        names[test_file] = f"{base}_p{parallel}"
+    return names
+
+
 def _run_tests(params, test_files, output_dir):
     # init vars
     test_results = []
+    test_files = list(test_files)
+    sub_dir_names = _output_sub_dir_names(test_files, params["parallel"])
 
     # iterate robot files and run tests
     for test_file in test_files:
-        output_sub_dir = output_dir / f"{test_file.stem}_p{params['parallel']}"
+        output_sub_dir = output_dir / sub_dir_names[test_file]
 
         # build robot command: pass all params from data as
         # parameters to the command call
@@ -253,7 +279,9 @@ def collect_all_reports(test_file, parent_dir):
         rebot(*files, name=name, log=None, stdout=stdout)
         report_html = Path("/opt/robot/report.html")
         if report_html.exists():
-            shutil.move("/opt/robot/report.html", parent_dir)
+            # replace a report left by an earlier rebot call instead of
+            # aborting the remaining suites
+            shutil.move(str(report_html), str(parent_dir / "report.html"))
 
 
 def run_tests(params, test_files, token, results_file, debug):
