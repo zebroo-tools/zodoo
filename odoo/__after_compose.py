@@ -589,7 +589,9 @@ def _determine_requirements(config, yml, PYTHON_VERSION, settings, globals):
     if use_base_split:
         project_pip_deps = _subtract_framework_requirements(
             all_dependencies["pip"],
-            _filter_framework_requirements(framework_reqs_text),
+            _filter_framework_requirements(
+                framework_reqs_text, PYTHON_VERSION
+            ),
             python_version=PYTHON_VERSION,
         )
     else:
@@ -628,9 +630,9 @@ def _determine_requirements(config, yml, PYTHON_VERSION, settings, globals):
         # the project layer can install its own lxml pin from the delta.
         service["build"]["args"]["ODOO_FRAMEWORK_REQUIREMENTS"] = (
             base64.encodebytes(
-                _filter_framework_requirements(framework_reqs_text).encode(
-                    "utf-8"
-                )
+                _filter_framework_requirements(
+                    framework_reqs_text, PYTHON_VERSION
+                ).encode("utf-8")
             ).decode("utf-8")
         )
         service["build"]["args"]["CUSTOMS_SHA"] = sha
@@ -1055,52 +1057,29 @@ def _subtract_framework_requirements(
     return result
 
 
-# Odoo pins that cannot be installed with pip on newer Python releases.
-# Entry: (package, pinned version, first broken Python, replacement version).
-# The pinned line keeps its scope below that Python release; a new line
-# installs the replacement from that release on.
-_FRAMEWORK_PIN_OVERRIDES = (
-    # libsass 0.22.0's setup.py reads ast.Constant.s, which Python 3.14
-    # removed; 0.23.0 builds and has the same API.
-    ("libsass", "0.22.0", "3.14", "0.23.0"),
-)
+def _apply_framework_pin_overrides(reqs, python_version):
+    """Same pin fixes as the base image (``lib_base_image``).
 
-
-def _override_framework_pin(line):
-    """Return the lines that replace ``line`` (usually ``[line]``)."""
-    parseable = re.split(r"\s+#", line.strip(), 1)[0].strip()
-    if not parseable or parseable.startswith("#"):
-        return [line]
+    Imported lazily so that older zodoo CLI installs without that helper
+    still work; they just install Odoo's pins unchanged.
+    """
     try:
-        req = Requirement(parseable)
-    except Exception:
-        return [line]
-    name = _canonical_pip_name(parseable)
-    for package, pinned, broken_from, replacement in _FRAMEWORK_PIN_OVERRIDES:
-        if name != package or str(req.specifier) != f"=={pinned}":
-            continue
-        if req.marker is not None and not req.marker.evaluate(
-            {"python_version": broken_from}
-        ):
-            # Odoo already scopes this pin away from the broken release.
-            continue
-        old_marker = f"({req.marker}) and " if req.marker is not None else ""
-        return [
-            f"{package}=={pinned} ; {old_marker}python_version < '{broken_from}'",
-            f"{package}=={replacement} ; python_version >= '{broken_from}'",
-        ]
-    return [line]
+        from zodoo.lib_base_image import apply_framework_pin_overrides
+    except ImportError:
+        return reqs
+    return apply_framework_pin_overrides(reqs, python_version)
 
 
-def _filter_framework_requirements(reqs):
+def _filter_framework_requirements(reqs, python_version=None):
     # lxml split off html_clean; lxml always comes with Odoo, so its
     # version is not touched here.
-    result = []
-    for line in reqs.splitlines():
+    def _f(line):
         if "lxml" in line:
-            continue
-        result.extend(_override_framework_pin(line))
-    return "\n".join(result)
+            return False
+        return True
+
+    reqs = _apply_framework_pin_overrides(reqs, python_version)
+    return "\n".join(filter(_f, reqs.splitlines()))
 
 
 def get_string_hash(input_string: str) -> str:

@@ -136,10 +136,50 @@ _YANKED_PIN_OVERRIDES = (
 def _apply_yanked_pin_overrides(text):
     """Rewrite known-yanked ``name==version`` pins to a safe replacement."""
     for package, yanked, replacement in _YANKED_PIN_OVERRIDES:
-        pattern = re.compile(
-            r"\b" + re.escape(f"{package}=={yanked}") + r"(?![\w.])"
-        )
-        text = pattern.sub(f"{package}=={replacement}", text)
+        text = _rewrite_pin(text, package, yanked, replacement)
+    return text
+
+
+# Odoo pins that pip cannot install on newer Python releases. The old
+# version stays right for older Python releases, so the rewrite only
+# happens when the project builds with ``first_broken_python`` or newer.
+# For every other project the text, and so the base hash, stays the same.
+#
+# Each entry is ``(package, pinned_version, first_broken_python,
+# replacement_version)``; matching works like :data:`_YANKED_PIN_OVERRIDES`.
+_PYTHON_PIN_OVERRIDES = (
+    # libsass 0.22.0's setup.py reads ast.Constant.s, which Python 3.14
+    # removed; 0.23.0 builds there and has the same API.
+    ("libsass", "0.22.0", (3, 14), "0.23.0"),
+)
+
+
+def _python_minor(python_version):
+    """``"3.14.10"`` or ``(3, 14, 10)`` -> ``(3, 14)``; else ``None``."""
+    if isinstance(python_version, (tuple, list)):
+        python_version = ".".join(str(part) for part in python_version)
+    match = re.match(r"^\s*(\d+)\.(\d+)", str(python_version or ""))
+    return (int(match.group(1)), int(match.group(2))) if match else None
+
+
+def _rewrite_pin(text, package, old, new):
+    pattern = re.compile(r"\b" + re.escape(f"{package}=={old}") + r"(?![\w.])")
+    return pattern.sub(f"{package}=={new}", text)
+
+
+def apply_framework_pin_overrides(text, python_version=None):
+    """Apply all known fixes for broken pins in Odoo's requirements.txt.
+
+    Used for the base image and by ``odoo/__after_compose.py`` for the
+    project layer, so both install the same versions.
+    """
+    text = _apply_yanked_pin_overrides(text or "")
+    minor = _python_minor(python_version)
+    if minor is None:
+        return text
+    for package, pinned, broken_from, replacement in _PYTHON_PIN_OVERRIDES:
+        if minor >= broken_from:
+            text = _rewrite_pin(text, package, pinned, replacement)
     return text
 
 
@@ -151,8 +191,9 @@ def _odoo_framework_requirements_text(config):
     the host it resolves to the zodoo CLI package directory, whose own
     requirements.txt has nothing to do with Odoo's framework deps.
 
-    Known-yanked pins are rewritten via :data:`_YANKED_PIN_OVERRIDES` so a
-    disappeared upstream release does not break the base image build.
+    Known-broken pins are rewritten via :func:`apply_framework_pin_overrides`
+    (yanked releases, and pins that do not build on newer Python releases)
+    so they do not break the base image build.
     """
     working = getattr(config, "WORKING_DIR", None)
     if working:
@@ -164,7 +205,10 @@ def _odoo_framework_requirements_text(config):
             odoo_dir = "odoo"
         candidate = Path(working) / odoo_dir / "requirements.txt"
         if candidate.exists():
-            return _apply_yanked_pin_overrides(candidate.read_text())
+            return apply_framework_pin_overrides(
+                candidate.read_text(),
+                getattr(config, "ODOO_PYTHON_VERSION", None),
+            )
     return ""
 
 
