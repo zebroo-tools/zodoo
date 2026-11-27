@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.16.1
+
+- **Fix**: odoo build: die Prüfung von requirements.hash nimmt dieselben Module wie odoo reload (Datenbank-Module und PYTHON_DEPS_EXTRA_MODULES). Vorher hat odoo build den Hash ohne diese Module neu berechnet, odoo reload ohne sie erneut ausgeführt und das Image ohne ihre Python-Pakete gebaut.
+
+
 ## 12.16.0
 
 - **Feature**: `odoo --version` gibt die zodoo-Version aus und endet mit Exit-Code 0. Die Option lädt kein Projekt und funktioniert deshalb in jedem Verzeichnis, auch per `ssh host 'odoo --version'` im Home-Verzeichnis. Die Version kommt aus derselben Quelle wie bei `odoo version`.

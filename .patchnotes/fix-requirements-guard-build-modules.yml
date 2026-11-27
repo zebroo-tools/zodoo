@@ -1,3 +1,0 @@
-type: fix
-description: "odoo build: die Prüfung von requirements.hash nimmt dieselben Module wie odoo reload (Datenbank-Module und PYTHON_DEPS_EXTRA_MODULES). Vorher hat odoo build den Hash ohne diese Module neu berechnet, odoo reload ohne sie erneut ausgeführt und das Image ohne ihre Python-Pakete gebaut."
-breaking: false
