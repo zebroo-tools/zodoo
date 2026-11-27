@@ -193,10 +193,12 @@ def reload_command(settings):
     would drop it, and the image would lose the packages of the modules that
     are about to be installed.
     """
+    from .module_tools import parse_module_names
+
     cmd = ["odoo", "reload", "--no-gimera-apply"]
-    extra = str(settings.get("PYTHON_DEPS_EXTRA_MODULES") or "").strip()
+    extra = parse_module_names(settings.get("PYTHON_DEPS_EXTRA_MODULES"))
     if extra:
-        cmd += ["-cR", f"PYTHON_DEPS_EXTRA_MODULES={extra}"]
+        cmd += ["-cR", f"PYTHON_DEPS_EXTRA_MODULES={','.join(extra)}"]
     return cmd
 
 

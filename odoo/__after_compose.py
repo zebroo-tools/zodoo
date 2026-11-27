@@ -750,10 +750,9 @@ def _get_extra_build_modules(settings):
     A module without source code in an addons path is an error: installing
     it would fail anyway.
     """
-    from zodoo.module_tools import Module, NotInAddonsPath
+    from zodoo.module_tools import Module, NotInAddonsPath, parse_module_names
 
-    names = settings.get("PYTHON_DEPS_EXTRA_MODULES") or ""
-    names = {x.strip() for x in str(names).split(",") if x.strip()}
+    names = set(parse_module_names(settings.get("PYTHON_DEPS_EXTRA_MODULES")))
     missing = []
     for name in sorted(names):
         try:

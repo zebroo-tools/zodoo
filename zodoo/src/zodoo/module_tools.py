@@ -2007,3 +2007,12 @@ def _transform_modulelist(module_list):
             yield objmod
         except NotInAddonsPath:
             pass
+
+
+def parse_module_names(value):
+    """Module names from a comma-separated setting, e.g.
+    PYTHON_DEPS_EXTRA_MODULES. Blanks and duplicates are dropped; the result
+    is sorted so that callers get a stable order."""
+    return sorted(
+        {x.strip() for x in str(value or "").split(",") if x.strip()}
+    )

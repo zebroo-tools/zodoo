@@ -123,8 +123,10 @@ Rules:
   odoo update mod_a,mod_b
   ```
 
-  The value is not stored: the next `odoo reload` without it finds the
-  modules in the database. Without the setting the requirements hash stays as
+  The value is not written to the project settings. It lives in the
+  generated run settings of this reload, so the following `odoo build` still
+  sees it, and it ends with the next `odoo reload` without `-cR`; by then the
+  modules are in the database. Without the setting the requirements hash stays as
   before. A name without source code in an addons path stops the reload.
 
 - **`odoo build` uses the same modules**: before it builds, `odoo build`

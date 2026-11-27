@@ -1,0 +1,3 @@
+type: fix
+description: "odoo build: PYTHON_DEPS_EXTRA_MODULES wird beim Neuschreiben der Requirements gleich gelesen wie in odoo reload (Leerzeichen und doppelte Namen fallen weg). Doku: wo der Wert zwischen odoo reload -cR und odoo build liegt und wann er endet. Prüfen: siehe Changelog-Fragment."
+breaking: false
