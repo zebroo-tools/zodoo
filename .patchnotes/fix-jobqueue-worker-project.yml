@@ -1,0 +1,3 @@
+type: fix
+description: "Background registry uploads: the worker now runs for the right project (-p/-xs/-xd), and failed uploads are retried a few times (ZODOO_JOBQUEUE_* settings)."
+breaking: false
