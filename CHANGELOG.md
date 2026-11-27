@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.17.1
+
+- **Fix**: Achtung, sichtbare Änderung: Während `odoo update` (außerhalb von DEVMODE) zeigt der mitgelieferte Proxy wieder die Wartungsseite mit HTTP 503 und `Retry-After: 30`. Externe Zugriffe sind für die ganze Dauer des Updates gesperrt, auch bei kleinen Updates auf Produktivsystemen. Nach dem Update gibt der Proxy die Seite innerhalb von etwa einer Sekunde wieder frei. Seit April 2026 hat das nicht mehr gewirkt: zodoo hat die Datei `proxy_exchange/odoo_update` mit Modus 0600 geschrieben, und die nginx-Worker des Proxys (Benutzer `nobody`) konnten sie nicht lesen. Jetzt schreibt zodoo sie mit 0644. Prüfen: `odoo update <modul>` starten und die Instanz im Browser aufrufen; während des Updates erscheint die Wartungsseite, danach wieder Odoo. Im Verzeichnis `~/.odoo/run/<projekt>/proxy_exchange/` bleibt keine Datei `odoo_update` liegen.
+
+
 ## 12.17.0
 
 - **Feature**: CI „Prebuild generic images“: Jedes Image wird vor dem Upload in die zodoo-Registry mit Trivy (feste Version, Prüfsumme) auf CVEs geprüft. Die Job-Summary zeigt je Image CRITICAL/HIGH/MEDIUM mit Anzahl behebbarer Befunde, die vollen Berichte liegen als Artefakt „trivy-reports“ am Lauf. Befunde lassen den Lauf nicht scheitern; scheitert der Scan selbst, wird nichts hochgeladen. Für Testläufe gibt es beim manuellen Start die Eingaben services, push und force_scan_failure (Doku: docs/090-registry.md).
