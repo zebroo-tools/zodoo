@@ -10,7 +10,7 @@ psycopg2-binary>=2.9.9
 requests<2.32.0
 lxml
 pudb>=2025.1
-urwid==2.6.16
+urwid==4.0.7
 shellingham
 xlsxwriter>=1.1.2
 tqdm>=4.64.0
