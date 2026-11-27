@@ -525,9 +525,7 @@ def _determine_requirements(config, yml, PYTHON_VERSION, settings, globals):
     #     (every new module / lib). Goes into the project layer as the
     #     final ARG-driven step so it does not invalidate the static
     #     zodoo-CLI install layers above it.
-    db_modules = _get_db_build_modules(settings) | _get_extra_build_modules(
-        settings
-    )
+    db_modules = _get_build_modules(settings)
     all_dependencies = _get_dependencies(
         config, globals, PYTHON_VERSION, db_modules=db_modules
     )
@@ -769,6 +767,16 @@ def _get_extra_build_modules(settings):
             "addons_paths or correct the module name."
         )
     return names
+
+
+def _get_build_modules(settings):
+    """Modules that count for the image beside the MANIFEST install list.
+
+    Database modules plus PYTHON_DEPS_EXTRA_MODULES. The requirements guard of
+    ``odoo build`` resolves with the same set; otherwise it computes another
+    hash than the reload and regenerates the files without these modules.
+    """
+    return _get_db_build_modules(settings) | _get_extra_build_modules(settings)
 
 
 def _get_dependencies(

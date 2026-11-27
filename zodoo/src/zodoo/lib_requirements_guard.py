@@ -91,7 +91,13 @@ def expected_requirements_hash(config, settings):
     globals_ = _hook_globals()
     python_version = _python_version(config, settings)
 
-    all_dependencies = hook._get_dependencies(config, globals_, python_version)
+    # Same module set as the reload hook (database modules and
+    # PYTHON_DEPS_EXTRA_MODULES of the last reload); without it the guard
+    # computes another hash and throws these modules out of the image.
+    db_modules = hook._get_build_modules(settings)
+    all_dependencies = hook._get_dependencies(
+        config, globals_, python_version, db_modules=db_modules
+    )
 
     # requirements.static wins over collected deps — same order as the hook.
     static_reqs_path = config.WORKING_DIR / "requirements.static"
@@ -173,14 +179,25 @@ def ensure_requirements_current(config, settings, autofix=True):
     # --no-gimera-apply on purpose: this runs from inside 'odoo build', and a
     # build must never quietly re-vendor submodules. Regenerating the compose
     # file and the requirements artifacts is all that is needed here.
-    click.secho(
-        "Regenerating them now: odoo reload --no-gimera-apply", fg="yellow"
-    )
-    subprocess.check_call(
-        ["odoo", "reload", "--no-gimera-apply"], cwd=str(config.WORKING_DIR)
-    )
+    cmd = reload_command(settings)
+    click.secho("Regenerating them now: " + " ".join(cmd), fg="yellow")
+    subprocess.check_call(cmd, cwd=str(config.WORKING_DIR))
     _warn_about_uncommitted(config)
     return True
+
+
+def reload_command(settings):
+    """The reload that regenerates the files with the same inputs.
+
+    PYTHON_DEPS_EXTRA_MODULES is only set for one reload. A plain reload here
+    would drop it, and the image would lose the packages of the modules that
+    are about to be installed.
+    """
+    cmd = ["odoo", "reload", "--no-gimera-apply"]
+    extra = str(settings.get("PYTHON_DEPS_EXTRA_MODULES") or "").strip()
+    if extra:
+        cmd += ["-cR", f"PYTHON_DEPS_EXTRA_MODULES={extra}"]
+    return cmd
 
 
 def _warn_about_uncommitted(config):
