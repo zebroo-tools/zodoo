@@ -1055,15 +1055,52 @@ def _subtract_framework_requirements(
     return result
 
 
-def _filter_framework_requirements(reqs):
-    # Prob: lxml splitted away html clean
-    # As lxml is always coming with odoo we dont touch the version here
-    def _f(line):
-        if "lxml" in line:
-            return False
-        return True
+# Odoo pins that cannot be installed with pip on newer Python releases.
+# Entry: (package, pinned version, first broken Python, replacement version).
+# The pinned line keeps its scope below that Python release; a new line
+# installs the replacement from that release on.
+_FRAMEWORK_PIN_OVERRIDES = (
+    # libsass 0.22.0's setup.py reads ast.Constant.s, which Python 3.14
+    # removed; 0.23.0 builds and has the same API.
+    ("libsass", "0.22.0", "3.14", "0.23.0"),
+)
 
-    return "\n".join(filter(_f, reqs.splitlines()))
+
+def _override_framework_pin(line):
+    """Return the lines that replace ``line`` (usually ``[line]``)."""
+    parseable = re.split(r"\s+#", line.strip(), 1)[0].strip()
+    if not parseable or parseable.startswith("#"):
+        return [line]
+    try:
+        req = Requirement(parseable)
+    except Exception:
+        return [line]
+    name = _canonical_pip_name(parseable)
+    for package, pinned, broken_from, replacement in _FRAMEWORK_PIN_OVERRIDES:
+        if name != package or str(req.specifier) != f"=={pinned}":
+            continue
+        if req.marker is not None and not req.marker.evaluate(
+            {"python_version": broken_from}
+        ):
+            # Odoo already scopes this pin away from the broken release.
+            continue
+        old_marker = f"({req.marker}) and " if req.marker is not None else ""
+        return [
+            f"{package}=={pinned} ; {old_marker}python_version < '{broken_from}'",
+            f"{package}=={replacement} ; python_version >= '{broken_from}'",
+        ]
+    return [line]
+
+
+def _filter_framework_requirements(reqs):
+    # lxml split off html_clean; lxml always comes with Odoo, so its
+    # version is not touched here.
+    result = []
+    for line in reqs.splitlines():
+        if "lxml" in line:
+            continue
+        result.extend(_override_framework_pin(line))
+    return "\n".join(result)
 
 
 def get_string_hash(input_string: str) -> str:
