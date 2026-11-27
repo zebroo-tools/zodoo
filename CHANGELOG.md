@@ -1,5 +1,10 @@
 # Changelog
 
+## 12.17.2
+
+- **Fix**: Background registry uploads: the worker now runs for the right project (-p/-xs/-xd), and failed uploads are retried a few times (ZODOO_JOBQUEUE_* settings).
+
+
 ## 12.17.1
 
 - **Fix**: Achtung, sichtbare Änderung: Während `odoo update` (außerhalb von DEVMODE) zeigt der mitgelieferte Proxy wieder die Wartungsseite mit HTTP 503 und `Retry-After: 30`. Externe Zugriffe sind für die ganze Dauer des Updates gesperrt, auch bei kleinen Updates auf Produktivsystemen. Nach dem Update gibt der Proxy die Seite innerhalb von etwa einer Sekunde wieder frei. Seit April 2026 hat das nicht mehr gewirkt: zodoo hat die Datei `proxy_exchange/odoo_update` mit Modus 0600 geschrieben, und die nginx-Worker des Proxys (Benutzer `nobody`) konnten sie nicht lesen. Jetzt schreibt zodoo sie mit 0644. Prüfen: `odoo update <modul>` starten und die Instanz im Browser aufrufen; während des Updates erscheint die Wartungsseite, danach wieder Odoo. Im Verzeichnis `~/.odoo/run/<projekt>/proxy_exchange/` bleibt keine Datei `odoo_update` liegen.
