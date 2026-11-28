@@ -1061,11 +1061,18 @@ def _apply_framework_pin_overrides(reqs, python_version):
     """Same pin fixes as the base image (``lib_base_image``).
 
     Imported lazily so that older zodoo CLI installs without that helper
-    still work; they just install Odoo's pins unchanged.
+    still work; they install Odoo's pins unchanged, which can fail on newer
+    Pythons, so say so instead of failing later without a hint.
     """
     try:
         from zodoo.lib_base_image import apply_framework_pin_overrides
     except ImportError:
+        click.secho(
+            "The installed zodoo CLI cannot fix Odoo's requirement pins for "
+            f"Python {python_version} (e.g. libsass on 3.14). If the build "
+            "fails on such a pin, update the zodoo CLI.",
+            fg="yellow",
+        )
         return reqs
     return apply_framework_pin_overrides(reqs, python_version)
 

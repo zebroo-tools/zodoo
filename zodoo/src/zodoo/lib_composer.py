@@ -441,14 +441,6 @@ def internal_reload(
     _check_python_version_supported(config.ODOO_PYTHON_VERSION, ODOO_VERSION)
 
 
-def _parse_python_version(version):
-    """Return (major, minor) of a version string like '3.13.13', or None."""
-    match = re.match(r"^\s*(\d+)\.(\d+)", str(version or ""))
-    if not match:
-        return None
-    return int(match.group(1)), int(match.group(2))
-
-
 def _read_odoo_python_range(release_file):
     """Read MIN_PY_VERSION and MAX_PY_VERSION from Odoo's release.py.
 
@@ -486,7 +478,9 @@ def _check_python_version_supported(
     warns above MAX_PY_VERSION; zodoo aborts, because the requirements and
     C extensions of that Odoo version are not tested with newer Pythons.
     """
-    chosen = _parse_python_version(python_version)
+    from .lib_base_image import python_minor
+
+    chosen = python_minor(python_version)
     if not chosen:
         return
     shown = ".".join(map(str, chosen))
@@ -496,11 +490,17 @@ def _check_python_version_supported(
     )
 
     if release_file is None:
-        try:
-            release_file = _odoo_release_file()
-        except Exception:  # pylint: disable=broad-except
-            release_file = None
-    py_range = _read_odoo_python_range(release_file) if release_file else None
+        release_file = _odoo_release_file()
+    py_range = _read_odoo_python_range(release_file)
+    if py_range is None and float(odoo_version) >= 19.0:
+        # Odoo 19+ always ships the range; a missing file means the Odoo
+        # source is not checked out (yet), so only the minimum is checked.
+        click.secho(
+            f"Could not read the Python range of Odoo {odoo_version}: "
+            f"{release_file} not found. Only the minimum Python 3.10 is "
+            "checked; run 'odoo reload' again once the Odoo source is there.",
+            fg="yellow",
+        )
     min_py, max_py = py_range or (None, None)
 
     if not min_py and float(odoo_version) >= 17.0:

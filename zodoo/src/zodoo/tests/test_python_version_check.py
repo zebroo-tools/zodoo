@@ -117,3 +117,14 @@ def test_unparsable_version_is_ignored(release, secho):
     _check("", "19", release(RELEASE_19))
     _check(None, "19", release(RELEASE_19))
     secho.assert_not_called()
+
+
+def test_missing_release_file_on_odoo_19_warns(tmp_path, secho):
+    _check("3.14.10", "19", tmp_path / "missing" / "release.py")
+    assert secho.call_count == 1
+    assert "Could not read the Python range" in secho.call_args[0][0]
+
+
+def test_missing_release_file_on_odoo_20_still_checks_minimum(tmp_path, secho):
+    with pytest.raises(SystemExit):
+        _check("3.9.17", "20", tmp_path / "missing" / "release.py")

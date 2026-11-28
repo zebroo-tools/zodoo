@@ -154,8 +154,11 @@ _PYTHON_PIN_OVERRIDES = (
 )
 
 
-def _python_minor(python_version):
-    """``"3.14.10"`` or ``(3, 14, 10)`` -> ``(3, 14)``; else ``None``."""
+def python_minor(python_version):
+    """``"3.14.10"`` or ``(3, 14, 10)`` -> ``(3, 14)``; else ``None``.
+
+    Shared with the Odoo x Python check in ``lib_composer``.
+    """
     if isinstance(python_version, (tuple, list)):
         python_version = ".".join(str(part) for part in python_version)
     match = re.match(r"^\s*(\d+)\.(\d+)", str(python_version or ""))
@@ -174,7 +177,7 @@ def apply_framework_pin_overrides(text, python_version=None):
     project layer, so both install the same versions.
     """
     text = _apply_yanked_pin_overrides(text or "")
-    minor = _python_minor(python_version)
+    minor = python_minor(python_version)
     if minor is None:
         return text
     for package, pinned, broken_from, replacement in _PYTHON_PIN_OVERRIDES:

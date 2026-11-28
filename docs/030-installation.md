@@ -117,6 +117,9 @@ odoo reload
 odoo build
 ```
 
+Snapshot as of 2026-11; the check itself always reads the project's
+`odoo/release.py`, so this table can lag behind newer Odoo releases.
+
 | Odoo | Python range of the Odoo source | Default | Tested with zodoo |
 | ---- | ------------------------------- | ------- | ----------------- |
 | 19   | 3.10 – 3.14                     | 3.12.11 | 3.12, 3.13        |
