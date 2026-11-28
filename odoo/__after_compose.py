@@ -586,12 +586,16 @@ def _determine_requirements(config, yml, PYTHON_VERSION, settings, globals):
         framework_reqs_path.read_text() if framework_reqs_path.exists() else ""
     )
 
+    # Filter once: the result is the same for every odoo service, and the
+    # pin override may print a warning that should appear only once.
+    framework_constraints = _filter_framework_requirements(
+        framework_reqs_text, PYTHON_VERSION
+    )
+
     if use_base_split:
         project_pip_deps = _subtract_framework_requirements(
             all_dependencies["pip"],
-            _filter_framework_requirements(
-                framework_reqs_text, PYTHON_VERSION
-            ),
+            framework_constraints,
             python_version=PYTHON_VERSION,
         )
     else:
@@ -629,11 +633,9 @@ def _determine_requirements(config, yml, PYTHON_VERSION, settings, globals):
         # cryptography, urllib3 …). Filtering matches the base build so
         # the project layer can install its own lxml pin from the delta.
         service["build"]["args"]["ODOO_FRAMEWORK_REQUIREMENTS"] = (
-            base64.encodebytes(
-                _filter_framework_requirements(
-                    framework_reqs_text, PYTHON_VERSION
-                ).encode("utf-8")
-            ).decode("utf-8")
+            base64.encodebytes(framework_constraints.encode("utf-8")).decode(
+                "utf-8"
+            )
         )
         service["build"]["args"]["CUSTOMS_SHA"] = sha
         service["build"]["args"]["ODOO_PYTHON_VERSION"] = settings[

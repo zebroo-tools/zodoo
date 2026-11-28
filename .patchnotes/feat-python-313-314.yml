@@ -19,6 +19,12 @@ description: |
   - Odoo-20-Projekt: dasselbe mit `ODOO_PYTHON_VERSION=3.14.10`.
   - Abbruch: Odoo-20-Projekt mit `ODOO_PYTHON_VERSION=3.11.9`;
     `odoo reload` meldet „too old for Odoo 20“ und nennt den Bereich.
+  - Älterer 19.0-Checkout mit `MAX_PY_VERSION = (3, 13)` in
+    `odoo/release.py` und `ODOO_PYTHON_VERSION=3.14.x`: `odoo reload`
+    bricht ab. Das ist gewollt; neuere 19.0-Stände erlauben 3.14.
+  - Fehlt `odoo/release.py` noch (Odoo-Quelle nicht ausgecheckt), zeigt
+    `odoo reload` bei Odoo 19/20 eine gelbe Warnung und prüft nur das
+    Minimum 3.10. Nach dem Auschecken `odoo reload` erneut aufrufen.
   Fehlt das Python-Image in der Registry, baut
   `odoo docker build-pythons <version>` es. Die Tabelle der Kombinationen
   steht in der Installationsdoku unter „Python inside the Odoo container“.
