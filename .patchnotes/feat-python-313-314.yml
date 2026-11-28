@@ -1,0 +1,30 @@
+type: feature
+breaking: false
+description: |
+  Odoo 19 und Odoo 20 laufen im Container jetzt auch mit neueren
+  Python-Versionen. Getestet sind Odoo 19 mit Python 3.13 und Odoo 20 mit
+  Python 3.14. Auswahl pro Projekt mit
+  `odoo setting ODOO_PYTHON_VERSION=3.13.13`, danach `odoo reload` und
+  `odoo build`. Der Standard bleibt 3.12.11.
+  `odoo reload` liest den erlaubten Bereich aus `odoo/release.py`
+  (`MIN_PY_VERSION`/`MAX_PY_VERSION`) des Projekts und bricht mit einer
+  klaren Meldung ab, wenn die gewählte Version außerhalb liegt.
+  Auf Python 3.14 installiert zodoo libsass 0.23.0 statt der von Odoo
+  gepinnten 0.22.0, die dort nicht baut; für ältere Python-Versionen
+  bleibt alles wie bisher.
+  Prüfen:
+  - Odoo-19-Projekt: `odoo setting ODOO_PYTHON_VERSION=3.13.13`,
+    `odoo reload`, `odoo build`, `odoo up -d`. Das Projekt startet,
+    `/web/login` lädt.
+  - Odoo-20-Projekt: dasselbe mit `ODOO_PYTHON_VERSION=3.14.10`.
+  - Abbruch: Odoo-20-Projekt mit `ODOO_PYTHON_VERSION=3.11.9`;
+    `odoo reload` meldet „too old for Odoo 20“ und nennt den Bereich.
+  - Älterer 19.0-Checkout mit `MAX_PY_VERSION = (3, 13)` in
+    `odoo/release.py` und `ODOO_PYTHON_VERSION=3.14.x`: `odoo reload`
+    bricht ab. Das ist gewollt; neuere 19.0-Stände erlauben 3.14.
+  - Fehlt `odoo/release.py` noch (Odoo-Quelle nicht ausgecheckt), zeigt
+    `odoo reload` bei Odoo 19/20 eine gelbe Warnung und prüft nur das
+    Minimum 3.10. Nach dem Auschecken `odoo reload` erneut aufrufen.
+  Fehlt das Python-Image in der Registry, baut
+  `odoo docker build-pythons <version>` es. Die Tabelle der Kombinationen
+  steht in der Installationsdoku unter „Python inside the Odoo container“.

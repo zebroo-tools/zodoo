@@ -586,10 +586,16 @@ def _determine_requirements(config, yml, PYTHON_VERSION, settings, globals):
         framework_reqs_path.read_text() if framework_reqs_path.exists() else ""
     )
 
+    # Filter once: the result is the same for every odoo service, and the
+    # pin override may print a warning that should appear only once.
+    framework_constraints = _filter_framework_requirements(
+        framework_reqs_text, PYTHON_VERSION
+    )
+
     if use_base_split:
         project_pip_deps = _subtract_framework_requirements(
             all_dependencies["pip"],
-            _filter_framework_requirements(framework_reqs_text),
+            framework_constraints,
             python_version=PYTHON_VERSION,
         )
     else:
@@ -627,11 +633,9 @@ def _determine_requirements(config, yml, PYTHON_VERSION, settings, globals):
         # cryptography, urllib3 …). Filtering matches the base build so
         # the project layer can install its own lxml pin from the delta.
         service["build"]["args"]["ODOO_FRAMEWORK_REQUIREMENTS"] = (
-            base64.encodebytes(
-                _filter_framework_requirements(framework_reqs_text).encode(
-                    "utf-8"
-                )
-            ).decode("utf-8")
+            base64.encodebytes(framework_constraints.encode("utf-8")).decode(
+                "utf-8"
+            )
         )
         service["build"]["args"]["CUSTOMS_SHA"] = sha
         service["build"]["args"]["ODOO_PYTHON_VERSION"] = settings[
@@ -1055,14 +1059,35 @@ def _subtract_framework_requirements(
     return result
 
 
-def _filter_framework_requirements(reqs):
-    # Prob: lxml splitted away html clean
-    # As lxml is always coming with odoo we dont touch the version here
+def _apply_framework_pin_overrides(reqs, python_version):
+    """Same pin fixes as the base image (``lib_base_image``).
+
+    Imported lazily so that older zodoo CLI installs without that helper
+    still work; they install Odoo's pins unchanged, which can fail on newer
+    Pythons, so say so instead of failing later without a hint.
+    """
+    try:
+        from zodoo.lib_base_image import apply_framework_pin_overrides
+    except ImportError:
+        click.secho(
+            "The installed zodoo CLI cannot fix Odoo's requirement pins for "
+            f"Python {python_version} (e.g. libsass on 3.14). If the build "
+            "fails on such a pin, update the zodoo CLI.",
+            fg="yellow",
+        )
+        return reqs
+    return apply_framework_pin_overrides(reqs, python_version)
+
+
+def _filter_framework_requirements(reqs, python_version=None):
+    # lxml split off html_clean; lxml always comes with Odoo, so its
+    # version is not touched here.
     def _f(line):
         if "lxml" in line:
             return False
         return True
 
+    reqs = _apply_framework_pin_overrides(reqs, python_version)
     return "\n".join(filter(_f, reqs.splitlines()))
 
 

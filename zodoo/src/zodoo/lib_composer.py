@@ -438,12 +438,88 @@ def internal_reload(
     # update a possible robot file also
     Commands.invoke(ctx, "robot:make-var-file")
 
-    if float(ODOO_VERSION) >= 17.0:
-        if any(
-            config.ODOO_PYTHON_VERSION.startswith(x)
-            for x in ["3.9.", "3.8.", "3.7."]
-        ):
-            abort("Invalid python version - needs at least 3.10")
+    _check_python_version_supported(config.ODOO_PYTHON_VERSION, ODOO_VERSION)
+
+
+def _read_odoo_python_range(release_file):
+    """Read MIN_PY_VERSION and MAX_PY_VERSION from Odoo's release.py.
+
+    Returns ((min_major, min_minor), (max_major, max_minor)); an entry is
+    None when the constant is missing (older Odoo versions do not define
+    them). Returns None when the file does not exist.
+    """
+    release_file = Path(release_file)
+    if not release_file.exists():
+        return None
+    content = release_file.read_text(errors="replace")
+
+    def _get(name):
+        match = re.search(
+            rf"^{name}\s*=\s*\(\s*(\d+)\s*,\s*(\d+)", content, re.M
+        )
+        return (int(match.group(1)), int(match.group(2))) if match else None
+
+    return _get("MIN_PY_VERSION"), _get("MAX_PY_VERSION")
+
+
+def _odoo_release_file():
+    from .odoo_config import customs_dir
+
+    return customs_dir() / MANIFEST().odoo_dir / "odoo" / "release.py"
+
+
+def _check_python_version_supported(
+    python_version, odoo_version, release_file=None
+):
+    """Abort when the Odoo source does not support the chosen Python version.
+
+    The supported range comes from MIN_PY_VERSION/MAX_PY_VERSION in the
+    project's odoo/release.py, so zodoo keeps no own table. Odoo itself only
+    warns above MAX_PY_VERSION; zodoo aborts, because the requirements and
+    C extensions of that Odoo version are not tested with newer Pythons.
+    """
+    from .lib_base_image import python_minor
+
+    chosen = python_minor(python_version)
+    if not chosen:
+        return
+    shown = ".".join(map(str, chosen))
+    hint = (
+        "Choose a supported version, e.g. "
+        "'odoo setting ODOO_PYTHON_VERSION=3.12.11', then run 'odoo reload'."
+    )
+
+    if release_file is None:
+        release_file = _odoo_release_file()
+    py_range = _read_odoo_python_range(release_file)
+    if py_range is None and float(odoo_version) >= 19.0:
+        # Odoo 19+ always ships the range; a missing file means the Odoo
+        # source is not checked out (yet), so only the minimum is checked.
+        click.secho(
+            f"Could not read the Python range of Odoo {odoo_version}: "
+            f"{release_file} not found. Only the minimum Python 3.10 is "
+            "checked; run 'odoo reload' again once the Odoo source is there.",
+            fg="yellow",
+        )
+    min_py, max_py = py_range or (None, None)
+
+    if not min_py and float(odoo_version) >= 17.0:
+        # Fallback for checkouts without the constants in release.py.
+        min_py = (3, 10)
+
+    if min_py and chosen < min_py:
+        abort(
+            f"Python {shown} is too old for Odoo {odoo_version}: "
+            f"needs at least {'.'.join(map(str, min_py))}. {hint}"
+        )
+    if max_py and chosen > max_py:
+        abort(
+            f"Python {shown} is not supported by Odoo {odoo_version}: "
+            f"the Odoo source ({release_file}) allows "
+            f"{'.'.join(map(str, min_py or (3, 0)))} to "
+            f"{'.'.join(map(str, max_py))}. {hint} "
+            "Or update the Odoo source if a newer release supports it."
+        )
 
 
 def _tweak_config(ODOO_VERSION, config):
